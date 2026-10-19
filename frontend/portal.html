@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portal de Cliente | GamerZone Odoo ERP</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👤</text></svg>">
+</head>
+<body>
+
+    <!-- Header & Navigation -->
+    <header class="navbar">
+        <a href="index.html" class="nav-brand">
+            <div class="logo-badge">🎮</div>
+            <div class="brand-title">Gamer<span>Zone</span></div>
+        </a>
+
+        <nav class="nav-links">
+            <a href="index.html" class="nav-link">🛒 Tienda</a>
+            <a href="portal.html" class="nav-link active">👤 Portal de Cliente</a>
+            <a href="index.html" class="cart-btn" style="text-decoration: none;">
+                <span>Volver a Comprar</span>
+            </a>
+        </nav>
+    </header>
+
+    <main class="portal-container">
+        <div style="text-align: center; margin-bottom: 2.5rem;">
+            <div class="hero-pill">
+                <span class="dot"></span>
+                <span>Trazabilidad de Órdenes y Facturas</span>
+            </div>
+            <h1 style="font-family: 'Space Grotesk'; font-size: 2.5rem; font-weight: 800; margin-bottom: 0.5rem;">
+                Portal de <span>Cliente</span>
+            </h1>
+            <p style="color: var(--text-secondary);">Consulta el estado en tiempo real de tus pedidos de venta en el ERP y tus facturas emitidas.</p>
+        </div>
+
+        <!-- Search Box by Email -->
+        <div class="search-box" style="margin-bottom: 2rem;">
+            <span class="search-icon">✉️</span>
+            <input type="email" id="portal-email" class="search-input" placeholder="Ingresa tu correo electrónico registrado (ej: carlos.cliente@gamerzone.gt)..." onkeydown="if(event.key==='Enter') searchCustomerData()">
+            <button onclick="searchCustomerData()" class="add-btn" style="position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%);">
+                Consultar
+            </button>
+        </div>
+
+        <!-- Tabs -->
+        <div class="portal-tabs">
+            <button class="tab-btn active" id="tab-orders-btn" onclick="switchTab('orders')">
+                📦 Mis Pedidos (ERP)
+            </button>
+            <button class="tab-btn" id="tab-invoices-btn" onclick="switchTab('invoices')">
+                🧾 Mis Facturas (Contabilidad)
+            </button>
+        </div>
+
+        <!-- Views -->
+        <div id="orders-view">
+            <div id="orders-list">
+                <p style="text-align: center; color: var(--text-muted); padding: 3rem 0;">
+                    Ingresa tu correo electrónico arriba para consultar tus compras en el ERP.
+                </p>
+            </div>
+        </div>
+
+        <div id="invoices-view" style="display: none;">
+            <div id="invoices-list">
+                <p style="text-align: center; color: var(--text-muted); padding: 3rem 0;">
+                    Ingresa tu correo electrónico arriba para consultar tus facturas registradas.
+                </p>
+            </div>
+        </div>
+    </main>
+
+    <script src="js/portal.js"></script>
+</body>
+</html>

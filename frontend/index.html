@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GamerZone Store | E-Commerce Integrado con Odoo ERP & CRM</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220%22 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎮</text></svg>">
+</head>
+<body>
+
+    <!-- Header & Navigation -->
+    <header class="navbar">
+        <a href="index.html" class="nav-brand">
+            <div class="logo-badge">🎮</div>
+            <div class="brand-title">Gamer<span>Zone</span></div>
+        </a>
+
+        <nav class="nav-links">
+            <a href="index.html" class="nav-link active">🛒 Tienda</a>
+            <a href="portal.html" class="nav-link">👤 Portal de Cliente</a>
+            <button class="cart-btn" onclick="openCartModal()" id="cart-toggle-btn">
+                <span>🛒</span>
+                <span>Mi Carrito</span>
+                <span class="cart-badge" id="cart-count">0</span>
+            </button>
+        </nav>
+    </header>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-pill">
+            <span class="dot"></span>
+            <span>Integración Backend en Tiempo Real con Odoo ERP & CRM</span>
+        </div>
+        <h1>El Mejor Hardware Gamer, <span>Sincronizado al Instante</span></h1>
+        <p>Catálogo interactivo conectado en vivo al sistema de gestión. Cada compra crea clientes, oportunidades en el CRM, descuenta inventario y genera facturación automática.</p>
+    </section>
+
+    <!-- Controls: Search & Category Filters -->
+    <section class="controls-container">
+        <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="search-input" class="search-input" placeholder="Buscar periféricos, teclados, audífonos o controles..." oninput="searchProducts()">
+        </div>
+        <div class="filter-pills" id="filter-pills">
+            <!-- Rendered dynamically -->
+        </div>
+    </section>
+
+    <!-- Products Grid -->
+    <main class="products-container">
+        <div class="products-grid" id="products-grid">
+            <!-- Rendered dynamically from Odoo API -->
+        </div>
+    </main>
+
+    <!-- Cart Modal -->
+    <div class="modal-overlay" id="cart-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2 class="modal-title">Tu Carrito de Compras</h2>
+                <button class="close-btn" onclick="closeCartModal()">&times;</button>
+            </div>
+            <div id="cart-items-container" style="max-height: 280px; overflow-y: auto; margin-bottom: 1.5rem;">
+                <!-- Rendered dynamically -->
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--border-glass);">
+                <span style="font-size: 1.1rem; color: var(--text-secondary);">Total a pagar:</span>
+                <span style="font-family: 'Space Grotesk'; font-size: 1.6rem; font-weight: 800; color: var(--accent-cyan);" id="cart-total">Q0.00</span>
+            </div>
+            <button class="submit-btn" onclick="openCheckoutModal()">Proceder al Pago</button>
+        </div>
+    </div>
+
+    <!-- Checkout Modal -->
+    <div class="modal-overlay" id="checkout-modal">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h2 class="modal-title">Datos para Facturación y Entrega</h2>
+                <button class="close-btn" onclick="closeCheckoutModal()">&times;</button>
+            </div>
+            <form onsubmit="submitOrder(event)">
+                <div class="form-group">
+                    <label class="form-label" for="cust-name">Nombre Completo *</label>
+                    <input type="text" id="cust-name" class="form-control" placeholder="Ej. Carlos Estuardo López" required value="Carlos Estuardo Perez">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="cust-email">Correo Electrónico (Para Portal) *</label>
+                    <input type="email" id="cust-email" class="form-control" placeholder="tu-correo@ejemplo.com" required value="carlos.cliente@gamerzone.gt">
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div class="form-group">
+                        <label class="form-label" for="cust-phone">Teléfono *</label>
+                        <input type="tel" id="cust-phone" class="form-control" placeholder="Ej. 5555-1234" required value="5555-8899">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="cust-city">Ciudad *</label>
+                        <input type="text" id="cust-city" class="form-control" placeholder="Guatemala" required value="Guatemala">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="cust-address">Dirección de Entrega *</label>
+                    <input type="text" id="cust-address" class="form-control" placeholder="Ej. 6ta Avenida 12-45 Zona 10" required value="6ta Avenida 15-20 Zona 10">
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin: 1.25rem 0; padding: 0.75rem; background: rgba(255,255,255,0.03); border-radius: 8px;">
+                    <span style="font-weight: 600;">Total del Pedido:</span>
+                    <span style="font-family: 'Space Grotesk'; font-size: 1.4rem; font-weight: 800; color: var(--accent-cyan);" id="checkout-total-val">Q0.00</span>
+                </div>
+
+                <button type="submit" class="submit-btn" id="submit-order-btn">Confirmar Compra y Facturar</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Success Modal -->
+    <div class="modal-overlay" id="success-modal">
+        <div class="modal-card">
+            <div class="success-banner">
+                <div class="success-icon">🎉</div>
+                <h2 style="font-size: 1.6rem; font-weight: 800;">¡Compra y Factura Generada!</h2>
+                <p style="color: var(--text-secondary); margin-top: 0.4rem; font-size: 0.95rem;">Tu pedido ha sido procesado y sincronizado automáticamente con Odoo ERP & CRM.</p>
+            </div>
+
+            <div class="receipt-box">
+                <div class="receipt-row">
+                    <span style="color: var(--text-muted);">No. Orden Venta ERP:</span>
+                    <strong style="color: var(--text-primary);" id="res-order-num">-</strong>
+                </div>
+                <div class="receipt-row">
+                    <span style="color: var(--text-muted);">Factura Electrónica:</span>
+                    <strong style="color: var(--accent-green);" id="res-inv-num">-</strong>
+                </div>
+                <div class="receipt-row">
+                    <span style="color: var(--text-muted);">Registro en CRM:</span>
+                    <strong style="color: #c4b5fd;" id="res-crm-id">-</strong>
+                </div>
+                <div class="receipt-row">
+                    <span style="color: var(--text-muted);">Inventario Almacén:</span>
+                    <strong style="color: #38bdf8;">Despacho Generado (Reserva de Stock)</strong>
+                </div>
+                <div class="receipt-row highlight">
+                    <span>Monto Total:</span>
+                    <span id="res-total">Q0.00</span>
+                </div>
+            </div>
+
+            <div style="display: none;" id="res-customer-email"></div>
+
+            <div style="display: flex; gap: 0.75rem; margin-top: 1rem;">
+                <button class="submit-btn" onclick="goToPortalWithEmail()">Ver en Portal de Cliente</button>
+                <button style="padding: 0.8rem 1.25rem; background: rgba(255,255,255,0.08); border: 1px solid var(--border-glass); border-radius: 12px; color: white; cursor: pointer; font-weight: 600;" onclick="closeSuccessModal()">Seguir Comprando</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

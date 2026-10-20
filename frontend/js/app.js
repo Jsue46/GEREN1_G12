@@ -1,311 +1,301 @@
-// GamerZone E-Commerce - Store & Checkout Logic
-
 const API_BASE = window.location.port === "8000" ? "" : "http://localhost:8000";
+const CART_KEY = "gamerzone_cart_v2";
+const CUSTOMER_KEY = "gamerzone_customer";
 
 let allProducts = [];
-let cart = [];
+let activeCategory = "Todos";
+let cart = readStorage(CART_KEY, []);
+let currentQuote = null;
 
-const iconsByCategory = {
-    "Periféricos": "🎧",
-    "Audio": "🔊",
-    "Monitores": "🖥️",
-    "Sillas": "💺",
-    "Controles": "🎮",
-    "Hardware": "⚙️",
-    "Teclados": "⌨️",
-    "Mouse": "🖱️",
-    "General": "📦"
-};
-
-// Initialize
 document.addEventListener("DOMContentLoaded", () => {
-    loadProducts();
+    document.getElementById("search-input").addEventListener("input", applyCatalogFilters);
+    document.getElementById("register-form").addEventListener("submit", registerCustomer);
+    document.getElementById("quote-form").addEventListener("submit", createQuote);
+    document.querySelectorAll(".modal-overlay").forEach(modal => {
+        modal.addEventListener("click", event => {
+            if (event.target === modal) closeModal(modal.id);
+        });
+    });
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape") document.querySelectorAll(".modal-overlay.active").forEach(modal => closeModal(modal.id));
+    });
     updateCartUI();
+    loadProducts();
 });
+
+function readStorage(key, fallback) {
+    try { return JSON.parse(localStorage.getItem(key)) || fallback; }
+    catch { return fallback; }
+}
+
+function saveCart() { localStorage.setItem(CART_KEY, JSON.stringify(cart)); }
+
+function money(value) {
+    return new Intl.NumberFormat("es-GT", { style: "currency", currency: "GTQ" }).format(Number(value) || 0);
+}
+
+function escapeHtml(value) {
+    return String(value ?? "").replace(/[&<>'"]/g, char => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;"
+    })[char]);
+}
+
+async function apiRequest(path, options = {}) {
+    const response = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        headers: { "Content-Type": "application/json", ...(options.headers || {}) }
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || data.success === false) throw new Error(data.detail || data.message || "No fue posible completar la solicitud.");
+    return data;
+}
 
 async function loadProducts() {
     const grid = document.getElementById("products-grid");
-    grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: var(--text-muted);">
-        <p style="font-size: 1.5rem;">Cargando catálogo en tiempo real desde Odoo ERP...</p>
-    </div>`;
-
+    grid.innerHTML = Array.from({ length: 8 }, () => '<div class="product-card skeleton-card" aria-hidden="true"><span></span><span></span><span></span></div>').join("");
     try {
-        const resp = await fetch(`${API_BASE}/api/products`);
-        const data = await resp.json();
-        
-        if (data.success && data.products) {
-            allProducts = data.products;
-            renderProducts(allProducts);
-            renderCategoryFilters(allProducts);
-        } else {
-            grid.innerHTML = `<p style="color: #f87171; text-align: center;">Error al cargar productos desde Odoo.</p>`;
-        }
-    } catch (err) {
-        console.error("Fetch error:", err);
-        grid.innerHTML = `<div style="grid-column: 1/-1; text-align: center; padding: 3rem;">
-            <p style="color: #f87171; font-weight: 600;">No se pudo conectar con el Middleware API (http://localhost:8000).</p>
-            <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 0.5rem;">Asegúrate de que el backend esté corriendo con: <code>python main.py</code></p>
-        </div>`;
+        const data = await apiRequest("/api/products?limit=60");
+        allProducts = data.products || [];
+        document.getElementById("catalog-count").textContent = `${allProducts.length}`;
+        document.getElementById("catalog-status").textContent = `${allProducts.length} productos sincronizados con el ERP`;
+        renderCategoryFilters();
+        applyCatalogFilters();
+    } catch (error) {
+        grid.innerHTML = `<div class="empty-state"><strong>No pudimos cargar el catálogo.</strong><p>${escapeHtml(error.message)}</p><button class="secondary-btn" type="button" onclick="loadProducts()">Reintentar</button></div>`;
+        document.getElementById("catalog-status").textContent = "El catálogo no está disponible en este momento";
     }
+}
+
+function renderCategoryFilters() {
+    const categories = ["Todos", ...new Set(allProducts.map(product => product.category || "General"))];
+    const container = document.getElementById("filter-pills");
+    container.innerHTML = categories.map(category => `<button class="filter-btn ${category === activeCategory ? "active" : ""}" type="button" data-category="${escapeHtml(category)}">${escapeHtml(category)}</button>`).join("");
+    container.querySelectorAll("button").forEach(button => button.addEventListener("click", () => {
+        activeCategory = button.dataset.category;
+        renderCategoryFilters();
+        applyCatalogFilters();
+    }));
+}
+
+function applyCatalogFilters() {
+    const term = document.getElementById("search-input").value.trim().toLocaleLowerCase("es");
+    const products = allProducts.filter(product => {
+        const categoryMatch = activeCategory === "Todos" || product.category === activeCategory;
+        const searchable = `${product.name} ${product.category} ${product.sku || ""}`.toLocaleLowerCase("es");
+        return categoryMatch && searchable.includes(term);
+    });
+    renderProducts(products);
 }
 
 function renderProducts(products) {
     const grid = document.getElementById("products-grid");
-    grid.innerHTML = "";
-
-    if (products.length === 0) {
-        grid.innerHTML = `<p style="grid-column: 1/-1; text-align: center; color: var(--text-muted);">No se encontraron productos.</p>`;
+    if (!products.length) {
+        grid.innerHTML = '<div class="empty-state"><strong>No encontramos coincidencias.</strong><p>Prueba otra palabra o selecciona una categoría diferente.</p></div>';
         return;
     }
-
-    products.forEach(p => {
-        const icon = getCategoryIcon(p.name, p.category);
-        const inStock = p.stock > 0;
-        
-        const card = document.createElement("div");
-        card.className = "product-card";
-        card.innerHTML = `
-            <div>
-                <div class="card-top">
-                    <span class="category-tag">${p.category}</span>
-                    <span class="stock-tag ${inStock ? 'in-stock' : 'out-stock'}">
-                        ${inStock ? `Stock: ${p.stock}` : 'Bajo Pedido'}
-                    </span>
-                </div>
-                <div class="product-img-box">${icon}</div>
-                <h3 class="product-title">${p.name}</h3>
-                <p class="product-desc">${p.description || "Garantía oficial y compatibilidad multiplataforma de GamerZone."}</p>
-            </div>
-            <div class="card-bottom">
-                <div class="price-box">
-                    <span class="price-label">Precio contado</span>
-                    <span class="price-value">Q${p.price.toFixed(2)}</span>
-                </div>
-                <button class="add-btn" onclick="addToCart(${p.id})">
-                    <span>🛒</span> Agregar
-                </button>
-            </div>
-        `;
-        grid.appendChild(card);
-    });
+    grid.innerHTML = products.map(product => {
+        const inStock = Number(product.stock) > 0;
+        const visual = product.image
+            ? `<img src="${product.image}" alt="${escapeHtml(product.name)}" loading="lazy" width="512" height="512">`
+            : `<span class="product-monogram" aria-hidden="true">${escapeHtml(product.name.slice(0, 2).toUpperCase())}</span>`;
+        return `<article class="product-card">
+            <div class="product-visual">${visual}</div>
+            <div class="product-meta"><span>${escapeHtml(product.category || "General")}</span><span class="${inStock ? "stock-ok" : "stock-request"}">${inStock ? `${product.stock} disponibles` : "Bajo pedido"}</span></div>
+            <h3>${escapeHtml(product.name)}</h3>
+            <p class="product-sku">SKU ${escapeHtml(product.sku || `GZ-${product.id}`)}</p>
+            <p class="product-description">${escapeHtml(product.description || "Garantía oficial y compatibilidad verificada por GamerZone.")}</p>
+            <div class="product-action"><strong>${money(product.price)}</strong><button class="add-btn" type="button" data-product-id="${product.id}">Agregar</button></div>
+        </article>`;
+    }).join("");
+    grid.querySelectorAll(".add-btn").forEach(button => button.addEventListener("click", () => addToCart(Number(button.dataset.productId))));
 }
 
-function getCategoryIcon(name, category) {
-    const text = (name + " " + category).toLowerCase();
-    if (text.includes("headset") || text.includes("audífono") || text.includes("audifono")) return "🎧";
-    if (text.includes("silla") || text.includes("caliber")) return "💺";
-    if (text.includes("control") || text.includes("gamepad") || text.includes("controller")) return "🎮";
-    if (text.includes("teclado") || text.includes("keyboard")) return "⌨️";
-    if (text.includes("mouse") || text.includes("ratón")) return "🖱️";
-    if (text.includes("monitor") || text.includes("pantalla")) return "🖥️";
-    if (text.includes("microfono") || text.includes("mic")) return "🎙️";
-    return iconsByCategory[category] || "📦";
-}
-
-function renderCategoryFilters(products) {
-    const container = document.getElementById("filter-pills");
-    const categories = ["Todos", ...new Set(products.map(p => p.category))];
-    
-    container.innerHTML = categories.map(c => `
-        <button class="filter-btn ${c === 'Todos' ? 'active' : ''}" onclick="filterByCategory('${c}', this)">
-            ${c}
-        </button>
-    `).join("");
-}
-
-function filterByCategory(category, btn) {
-    document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
-    btn.classList.add("active");
-
-    if (category === "Todos") {
-        renderProducts(allProducts);
-    } else {
-        const filtered = allProducts.filter(p => p.category === category);
-        renderProducts(filtered);
-    }
-}
-
-function searchProducts() {
-    const term = document.getElementById("search-input").value.toLowerCase();
-    const filtered = allProducts.filter(p => 
-        p.name.toLowerCase().includes(term) || 
-        p.category.toLowerCase().includes(term)
-    );
-    renderProducts(filtered);
-}
-
-// Cart Functionality
 function addToCart(productId) {
-    const product = allProducts.find(p => p.id === productId);
+    const product = allProducts.find(item => item.id === productId);
     if (!product) return;
-
-    const existing = cart.find(it => it.id === productId);
-    if (existing) {
-        existing.quantity += 1;
-    } else {
-        cart.push({
-            id: product.id,
-            name: product.name,
-            price: product.price,
-            quantity: 1
-        });
-    }
-    updateCartUI();
-    showToast(`"${product.name}" agregado al carrito`);
+    const existing = cart.find(item => item.id === productId);
+    if (existing) existing.quantity += 1;
+    else cart.push({ id: product.id, name: product.name, sku: product.sku, price: Number(product.price), quantity: 1, image: product.image || null });
+    saveCart(); updateCartUI();
+    showToast(`${product.name} se agregó al carrito.`);
 }
 
 function updateCartUI() {
-    const badge = document.getElementById("cart-count");
-    const totalCount = cart.reduce((sum, it) => sum + it.quantity, 0);
-    badge.innerText = totalCount;
+    document.getElementById("cart-count").textContent = cart.reduce((sum, item) => sum + item.quantity, 0);
 }
 
-function openCartModal() {
-    const modal = document.getElementById("cart-modal");
+function cartTotal() { return cart.reduce((sum, item) => sum + item.price * item.quantity, 0); }
+
+function openCartModal() { renderCart(); openModal("cart-modal"); }
+
+function renderCart() {
     const container = document.getElementById("cart-items-container");
-    const totalEl = document.getElementById("cart-total");
-
-    if (cart.length === 0) {
-        container.innerHTML = `<p style="text-align: center; color: var(--text-muted); padding: 2rem 0;">Tu carrito está vacío.</p>`;
-        totalEl.innerText = "Q0.00";
+    const quoteButton = document.getElementById("quote-cart-btn");
+    const clearButton = document.getElementById("clear-cart-btn");
+    if (!cart.length) {
+        container.innerHTML = '<div class="empty-state compact"><strong>Tu carrito está vacío.</strong><p>Agrega productos del catálogo para solicitar una cotización.</p></div>';
+        quoteButton.disabled = true;
+        clearButton.hidden = true;
     } else {
-        let total = 0;
-        container.innerHTML = cart.map(it => {
-            const subtotal = it.price * it.quantity;
-            total += subtotal;
-            return `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0; border-bottom: 1px solid var(--border-glass);">
-                    <div>
-                        <div style="font-weight: 600;">${it.name}</div>
-                        <div style="font-size: 0.85rem; color: var(--text-muted);">Q${it.price.toFixed(2)} c/u</div>
-                    </div>
-                    <div style="display: flex; align-items: center; gap: 0.5rem;">
-                        <button onclick="changeQuantity(${it.id}, -1)" style="padding: 0.2rem 0.5rem; background: rgba(255,255,255,0.08); border: none; color: white; border-radius: 4px; cursor: pointer;">-</button>
-                        <span style="font-weight: 700;">${it.quantity}</span>
-                        <button onclick="changeQuantity(${it.id}, 1)" style="padding: 0.2rem 0.5rem; background: rgba(255,255,255,0.08); border: none; color: white; border-radius: 4px; cursor: pointer;">+</button>
-                        <span style="margin-left: 0.75rem; font-weight: 700; color: var(--accent-cyan);">Q${subtotal.toFixed(2)}</span>
-                    </div>
-                </div>
-            `;
-        }).join("");
-        totalEl.innerText = `Q${total.toFixed(2)}`;
+        container.innerHTML = cart.map(item => `<div class="cart-item">
+            <div><strong>${escapeHtml(item.name)}</strong><span>${money(item.price)} por unidad</span></div>
+            <div class="quantity-control" aria-label="Cantidad de ${escapeHtml(item.name)}">
+                <button type="button" onclick="changeQuantity(${item.id}, -1)" aria-label="Reducir cantidad">−</button>
+                <span>${item.quantity}</span>
+                <button type="button" onclick="changeQuantity(${item.id}, 1)" aria-label="Aumentar cantidad">+</button>
+            </div>
+            <strong>${money(item.price * item.quantity)}</strong>
+            <button class="remove-btn" type="button" onclick="removeFromCart(${item.id})" aria-label="Quitar ${escapeHtml(item.name)}">Quitar</button>
+        </div>`).join("");
+        quoteButton.disabled = false;
+        clearButton.hidden = false;
     }
-
-    modal.classList.add("active");
+    document.getElementById("cart-total").textContent = money(cartTotal());
 }
 
 function changeQuantity(id, delta) {
-    const item = cart.find(it => it.id === id);
+    const item = cart.find(entry => entry.id === id);
     if (!item) return;
-
     item.quantity += delta;
-    if (item.quantity <= 0) {
-        cart = cart.filter(it => it.id !== id);
-    }
-    updateCartUI();
-    openCartModal();
+    if (item.quantity < 1) cart = cart.filter(entry => entry.id !== id);
+    saveCart(); updateCartUI(); renderCart();
 }
 
-function closeCartModal() {
-    document.getElementById("cart-modal").classList.remove("active");
+function removeFromCart(id) { cart = cart.filter(item => item.id !== id); saveCart(); updateCartUI(); renderCart(); }
+function clearCart() { cart = []; saveCart(); updateCartUI(); renderCart(); }
+
+function openRegisterModal() { fillCustomerForm(document.getElementById("register-form")); openModal("register-modal"); }
+
+function openQuoteModal() {
+    if (!cart.length) return showToast("Agrega al menos un producto antes de cotizar.", "error");
+    closeModal("cart-modal");
+    fillCustomerForm(document.getElementById("quote-form"));
+    document.getElementById("quote-total-value").textContent = money(cartTotal());
+    openModal("quote-modal");
 }
 
-function openCheckoutModal() {
-    if (cart.length === 0) {
-        alert("Agrega al menos un producto al carrito antes de proceder.");
-        return;
-    }
-    closeCartModal();
-    document.getElementById("checkout-modal").classList.add("active");
-    
-    const checkoutTotal = cart.reduce((sum, it) => sum + (it.price * it.quantity), 0);
-    document.getElementById("checkout-total-val").innerText = `Q${checkoutTotal.toFixed(2)}`;
+function fillCustomerForm(form) {
+    const customer = readStorage(CUSTOMER_KEY, null);
+    if (!customer) return;
+    Object.entries(customer).forEach(([key, value]) => { if (form.elements[key]) form.elements[key].value = value; });
 }
 
-function closeCheckoutModal() {
-    document.getElementById("checkout-modal").classList.remove("active");
+function formCustomer(form) {
+    return Object.fromEntries(["name", "email", "phone", "address", "city"].map(key => [key, form.elements[key].value.trim()]));
 }
 
-async function submitOrder(e) {
-    e.preventDefault();
-    const btn = document.getElementById("submit-order-btn");
-    btn.disabled = true;
-    btn.innerText = "⏳ Sincronizando con ERP y Facturando...";
-
-    const payload = {
-        customer: {
-            name: document.getElementById("cust-name").value,
-            email: document.getElementById("cust-email").value,
-            phone: document.getElementById("cust-phone").value,
-            address: document.getElementById("cust-address").value,
-            city: document.getElementById("cust-city").value
-        },
-        items: cart.map(it => ({
-            product_id: it.id,
-            name: it.name,
-            price_unit: it.price,
-            quantity: it.quantity
-        }))
-    };
-
-    try {
-        const resp = await fetch(`${API_BASE}/api/checkout`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload)
-        });
-
-        const data = await resp.json();
-
-        if (data.success) {
-            closeCheckoutModal();
-            showSuccessModal(data.data);
-            cart = [];
-            updateCartUI();
-        } else {
-            alert("Error al procesar pedido: " + (data.detail || "Error desconocido"));
+function validateForm(form) {
+    let valid = true;
+    form.querySelectorAll("input").forEach(input => {
+        const error = input.closest(".form-group").querySelector(".field-error");
+        error.textContent = "";
+        input.removeAttribute("aria-invalid");
+        if (!input.checkValidity()) {
+            error.textContent = input.type === "email" ? "Ingresa un correo válido." : "Este campo es obligatorio.";
+            input.setAttribute("aria-invalid", "true");
+            valid = false;
         }
-    } catch (err) {
-        console.error(err);
-        alert("Error de red conectando al Middleware API.");
-    } finally {
-        btn.disabled = false;
-        btn.innerText = "Confirmar Compra y Facturar";
+    });
+    if (!valid) form.querySelector("[aria-invalid='true']")?.focus();
+    return valid;
+}
+
+async function registerCustomer(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!validateForm(form)) return;
+    const button = document.getElementById("register-btn");
+    setButtonLoading(button, true, "Registrando...");
+    const customer = formCustomer(form);
+    try {
+        await apiRequest("/api/customers", { method: "POST", body: JSON.stringify(customer) });
+        localStorage.setItem(CUSTOMER_KEY, JSON.stringify(customer));
+        closeModal("register-modal");
+        showToast("Cuenta creada. Tus datos quedaron guardados para cotizar.");
+    } catch (error) { showToast(error.message, "error"); }
+    finally { setButtonLoading(button, false); }
+}
+
+async function createQuote(event) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    if (!validateForm(form)) return;
+    const customer = formCustomer(form);
+    const button = document.getElementById("create-quote-btn");
+    setButtonLoading(button, true, "Guardando en Odoo...");
+    try {
+        const result = await apiRequest("/api/quotes", {
+            method: "POST",
+            body: JSON.stringify({ customer, items: cart.map(item => ({ product_id: item.id, name: item.name, price_unit: item.price, quantity: item.quantity })) })
+        });
+        currentQuote = result.data;
+        localStorage.setItem(CUSTOMER_KEY, JSON.stringify(customer));
+        localStorage.setItem("gamerzone_last_quote", JSON.stringify(currentQuote));
+        document.getElementById("quote-number").textContent = currentQuote.quote_number;
+        document.getElementById("quote-result-total").textContent = money(currentQuote.total);
+        closeModal("quote-modal");
+        openModal("quote-success-modal");
+    } catch (error) { showToast(error.message, "error"); }
+    finally { setButtonLoading(button, false); }
+}
+
+async function convertCurrentQuote() {
+    if (!currentQuote) return;
+    const button = document.getElementById("convert-quote-btn");
+    setButtonLoading(button, true, "Confirmando orden...");
+    try {
+        const result = await apiRequest(`/api/quotes/${currentQuote.quote_id}/convert`, {
+            method: "POST", body: JSON.stringify({ email: currentQuote.customer_email })
+        });
+        const order = result.data;
+        document.getElementById("result-order").textContent = order.order_number || `SO-${order.sale_order_id}`;
+        document.getElementById("result-invoice").textContent = order.invoice?.name || "Emitida en Odoo";
+        document.getElementById("result-total").textContent = money(order.total);
+        currentQuote.customer_email = order.customer_email;
+        cart = []; saveCart(); updateCartUI();
+        closeModal("quote-success-modal");
+        openModal("order-success-modal");
+    } catch (error) { showToast(error.message, "error"); }
+    finally { setButtonLoading(button, false); }
+}
+
+function finishQuoteLater() {
+    cart = []; saveCart(); updateCartUI(); closeModal("quote-success-modal");
+    showToast("Cotización guardada. Puedes consultarla en Mis pedidos.");
+}
+
+function goToPortal() {
+    const customer = readStorage(CUSTOMER_KEY, {});
+    window.location.href = `portal.html?email=${encodeURIComponent(currentQuote?.customer_email || customer.email || "")}`;
+}
+
+function setButtonLoading(button, loading, label = "") {
+    if (loading) {
+        button.dataset.label = button.textContent;
+        button.textContent = label;
+        button.disabled = true;
+    } else {
+        button.textContent = button.dataset.label || button.textContent;
+        button.disabled = false;
     }
 }
 
-function showSuccessModal(orderData) {
-    const modal = document.getElementById("success-modal");
-    document.getElementById("res-order-num").innerText = orderData.order_number || `SO#${orderData.sale_order_id}`;
-    document.getElementById("res-inv-num").innerText = orderData.invoice ? orderData.invoice.name : "Emitida en Odoo";
-    document.getElementById("res-total").innerText = `Q${orderData.total.toFixed(2)}`;
-    document.getElementById("res-crm-id").innerText = `Lead #${orderData.crm_lead_id} (Oportunidad Ganada)`;
-    document.getElementById("res-customer-email").innerText = document.getElementById("cust-email").value;
+function openModal(id) {
+    const modal = document.getElementById(id);
     modal.classList.add("active");
+    document.body.classList.add("modal-open");
+    setTimeout(() => modal.querySelector("button, input")?.focus(), 50);
 }
 
-function closeSuccessModal() {
-    document.getElementById("success-modal").classList.remove("active");
+function closeModal(id) {
+    document.getElementById(id)?.classList.remove("active");
+    if (!document.querySelector(".modal-overlay.active")) document.body.classList.remove("modal-open");
 }
 
-function goToPortalWithEmail() {
-    const email = document.getElementById("res-customer-email").innerText;
-    window.location.href = `portal.html?email=${encodeURIComponent(email)}`;
-}
-
-function showToast(msg) {
+function showToast(message, type = "success") {
     const toast = document.createElement("div");
-    toast.style.position = "fixed";
-    toast.style.bottom = "2rem";
-    toast.style.right = "2rem";
-    toast.style.background = "#1e293b";
-    toast.style.border = "1px solid #8b5cf6";
-    toast.style.color = "white";
-    toast.style.padding = "0.75rem 1.25rem";
-    toast.style.borderRadius = "8px";
-    toast.style.boxShadow = "0 10px 25px rgba(0,0,0,0.5)";
-    toast.style.zIndex = "9999";
-    toast.innerText = msg;
-    document.body.appendChild(toast);
-    setTimeout(() => toast.remove(), 2500);
+    toast.className = `toast ${type}`;
+    toast.textContent = message;
+    document.getElementById("toast-region").appendChild(toast);
+    setTimeout(() => toast.remove(), 4200);
 }

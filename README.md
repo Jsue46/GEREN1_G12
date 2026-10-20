@@ -4,18 +4,21 @@ Proyecto de Transformación Digital para el curso de **Sistemas Organizacionales
 
 ---
 
-## Alcance de la Fase 3: Integración Backend y Portal de Cliente (Integrante 2)
+## Alcance de la Fase 3: E-Commerce e Integración
 
-Este repositorio contiene la solución completa para el rol de **Integrante 2**, encargada de la capa de comunicación, lógica de negocio y trazabilidad entre la plataforma E-Commerce y el ERP/CRM en la nube:
+Este repositorio contiene el sitio E-Commerce y la capa de integración con Odoo ERP/CRM:
 
-1. **Middleware API REST (FastAPI):** Servicio backend que recibe las solicitudes de compra del cliente y las procesa en Odoo sin intervención humana.
-2. **Sincronización Bidireccional en Tiempo Real:**
+1. **Catálogo y carrito (Integrante 1):** catálogo sincronizado de más de 30 productos, búsqueda, filtros, cantidades, eliminación, total y persistencia local.
+2. **Registro y cotizaciones (Integrante 1):** alta de clientes, cotizaciones en borrador y conversión explícita a orden de venta.
+3. **Manual de usuario (Integrante 1):** recorrido ilustrado con capturas de las pantallas principales.
+4. **Middleware API REST (FastAPI):** Servicio backend que recibe las solicitudes del sitio y las procesa en Odoo.
+5. **Sincronización Bidireccional en Tiempo Real:**
    * **CRM (`crm.lead`):** Registra cada intento y venta como oportunidad ganada con su monto esperado.
    * **ERP Ventas (`sale.order`):** Genera la orden de venta confirmada.
    * **Inventario (`stock.picking`):** Descuenta el stock y genera la orden de despacho en almacén automáticamente.
-3. **Facturación Funcional:** Al confirmar la compra, Odoo genera la factura de cliente (`account.move`) y la publica con correlativo contable oficial.
-4. **Portal de Cliente:** Endpoints y vistas interactivas para que el comprador consulte el estado de sus pedidos y descargue sus facturas por correo.
-5. **Suite de Pruebas de Flujo Completo:** Script automatizado (`tests/test_flow.py`) que valida la trazabilidad de extremo a extremo.
+6. **Facturación Funcional:** Al convertir la cotización, Odoo confirma la venta, reserva inventario y publica la factura de cliente (`account.move`).
+7. **Portal de Cliente:** Vista para consultar cotizaciones, pedidos y facturas por correo.
+8. **Pruebas:** Contrato API aislado en `tests/test_api.py` y prueba integral en `tests/test_flow.py`.
 
 ---
 
@@ -57,17 +60,21 @@ SEMI1_G12/
 │   ├── main.py                # Servidor FastAPI con endpoints REST y CORS
 │   └── requirements.txt       # Dependencias de Python
 ├── frontend/
-│   ├── index.html             # Catálogo de 45 productos, carrito y checkout
+│   ├── index.html             # Catálogo, carrito, registro y cotizaciones
 │   ├── portal.html            # Portal de consulta de pedidos y facturas por correo
+│   ├── assets/                # Imagen principal del sitio
 │   ├── css/
-│   │   └── style.css          # Estilo Dark Mode & Glassmorphism
+│   │   └── style.css          # Diseño responsive claro y oscuro
 │   └── js/
-│       ├── app.js             # Lógica de tienda y llamada a POST /api/checkout
+│       ├── app.js             # Lógica de catálogo, carrito, registro y cotización
 │       └── portal.js          # Lógica de consulta a GET /api/portal/*
 ├── tests/
+│   ├── test_api.py            # Pruebas aisladas de los endpoints web
 │   └── test_flow.py           # Script de prueba integral paso a paso
 ├── docs/
-│   └── manual_tecnico_integracion.md # Manual técnico oficial para entrega
+│   ├── manual_tecnico_integracion.md  # Manual técnico oficial
+│   ├── manual_usuario_ecommerce.md    # Manual del sitio con capturas
+│   └── capturas/                      # Evidencia visual del flujo
 └── README.md
 ```
 
@@ -93,16 +100,18 @@ python main.py
 ```
 El servicio estará disponible en `http://localhost:8000`.
 
-### 4. Ejecutar la Prueba de Flujo Completo
+### 4. Ejecutar las pruebas del sitio
 En otra terminal:
 ```bash
-cd tests
-python test_flow.py
+python -m unittest tests/test_api.py
 ```
+
+La prueba integral `tests/test_flow.py` crea registros reales en Odoo. Ejecútela solo cuando necesite validar el flujo completo de integración.
 
 ---
 
-## Documentación Técnica
+## Documentación
 
 Para ver la especificación completa de los endpoints, mapeo detallado de campos con la base de datos de Odoo y evidencias de ejecución, consultar el documento oficial:
 * [Manual Técnico de Integración](docs/manual_tecnico_integracion.md)
+* [Manual de Usuario del E-Commerce](docs/manual_usuario_ecommerce.md)

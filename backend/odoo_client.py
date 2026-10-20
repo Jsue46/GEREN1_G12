@@ -32,7 +32,7 @@ class OdooClient:
         self.ensure_auth()
         # Query active saleable products
         domain = [('sale_ok', '=', True)]
-        fields = ['id', 'name', 'lst_price', 'qty_available', 'categ_id', 'description_sale']
+        fields = ['id', 'name', 'default_code', 'lst_price', 'qty_available', 'categ_id', 'description_sale', 'image_512']
         products = self.models.execute_kw(
             self.db, self.uid, self.password,
             'product.product', 'search_read',
@@ -44,10 +44,12 @@ class OdooClient:
             result.append({
                 'id': p['id'],
                 'name': p['name'],
+                'sku': p.get('default_code') or f"GZ-{p['id']}",
                 'price': float(p['lst_price']),
                 'stock': float(p.get('qty_available', 0)),
                 'category': categ_name,
-                'description': p.get('description_sale') or ""
+                'description': p.get('description_sale') or "",
+                'image': f"data:image/png;base64,{p['image_512']}" if p.get('image_512') else None
             })
         return result
 
@@ -91,6 +93,22 @@ class OdooClient:
         )
         return lead_id
 
+    def create_quote_lead(self, partner_id, customer_name, total_amount, items_desc=""):
+        """Registra la solicitud como oportunidad abierta, antes de convertirla en venta."""
+        self.ensure_auth()
+        return self.models.execute_kw(
+            self.db, self.uid, self.password,
+            'crm.lead', 'create',
+            [{
+                'name': f"Cotización Web - {customer_name}",
+                'partner_id': partner_id,
+                'expected_revenue': total_amount,
+                'probability': 25,
+                'type': 'opportunity',
+                'description': f"Cotización solicitada desde E-Commerce. Detalle:\n{items_desc}"
+            }]
+        )
+
     def create_sale_order(self, partner_id, items, lead_id=None):
         """
         items: list of dicts: {'product_id': int, 'quantity': float, 'price_unit': float, 'name': str}
@@ -133,6 +151,37 @@ class OdooClient:
             [[order_id], ['name', 'state', 'picking_ids']]
         )[0]
         return data
+
+    def get_sale_order(self, order_id):
+        self.ensure_auth()
+        records = self.models.execute_kw(
+            self.db, self.uid, self.password,
+            'sale.order', 'read',
+            [[order_id], ['id', 'name', 'state', 'amount_total', 'partner_id', 'opportunity_id']]
+        )
+        if not records:
+            raise ValueError("La cotización indicada no existe")
+        return records[0]
+
+    def mark_lead_won(self, lead_id):
+        """Actualiza la probabilidad cuando la cotización se convierte en orden."""
+        if not lead_id:
+            return
+        self.ensure_auth()
+        self.models.execute_kw(
+            self.db, self.uid, self.password,
+            'crm.lead', 'write',
+            [[lead_id], {'probability': 100}]
+        )
+
+    def quote_belongs_to_email(self, partner_id, email):
+        self.ensure_auth()
+        matching = self.models.execute_kw(
+            self.db, self.uid, self.password,
+            'res.partner', 'search',
+            [[('id', '=', partner_id), ('email', '=ilike', email.strip())]]
+        )
+        return bool(matching)
 
     def create_and_post_invoice(self, order_id):
         self.ensure_auth()

@@ -242,29 +242,29 @@ Total de productos de muestra obtenidos: 5
  PASO 2: Gestión de Cliente en Odoo (res.partner)
 ================================================================================
 Registrando cliente web: Alejandro Morales (Test Automatizado)...
-✅ Cliente registrado / verificado en Odoo con ID: 48
+[OK] Cliente registrado / verificado en Odoo con ID: 48
 
 ================================================================================
  PASO 3: Registro Automático de Oportunidad en CRM (crm.lead)
 ================================================================================
-✅ Lead / Oportunidad creada en el Pipeline del CRM con ID: 6
+[OK] Lead / Oportunidad creada en el Pipeline del CRM con ID: 6
    Monto esperado: Q699.0 | Probabilidad: 100% | Estado: Ganada/En Proceso
 
 ================================================================================
  PASO 4: Generación de la Orden de Venta en el ERP (sale.order)
 ================================================================================
-✅ Orden de Venta creada en borrador con ID: 4 (Vinculada a Oportunidad #6)
+[OK] Orden de Venta creada en borrador con ID: 4 (Vinculada a Oportunidad #6)
 
 ================================================================================
  PASO 5: Confirmación de Orden y Actualización de Inventario (stock)
 ================================================================================
-✅ Orden de Venta confirmada: S00004 (Estado: sale)
-✅ Movimiento de Almacén (Albarán de Despacho) generado automáticamente con IDs: [7]
+[OK] Orden de Venta confirmada: S00004 (Estado: sale)
+[OK] Movimiento de Almacén (Albarán de Despacho) generado automáticamente con IDs: [7]
 
 ================================================================================
  PASO 6: Emisión Automática de la Factura de Cliente (account.move)
 ================================================================================
-✅ Factura de Cliente creada y validada automáticamente en Odoo:
+[OK] Factura de Cliente creada y validada automáticamente en Odoo:
    • Número de Factura: INV/2026/10/0002
    • Estado Contable: posted (Publicada)
    • Total Facturado: Q699.00
@@ -272,10 +272,10 @@ Registrando cliente web: Alejandro Morales (Test Automatizado)...
 ================================================================================
  PASO 7: Consulta en Tiempo Real desde el Portal de Cliente
 ================================================================================
-📋 Órdenes encontradas en el portal:
+Consultando órdenes encontradas en el portal:
    - No: S00004 | Fecha: 2026-10-19 21:45:01 | Total: Q699.0 | Estado: Orden Confirmada
 
-🧾 Facturas encontradas en el portal:
+Consultando facturas encontradas en el portal:
    - Factura: INV/2026/10/0002 | Fecha: 2026-10-19 | Total: Q699.0 | Estado: Emitida / Publicada
 ```
 

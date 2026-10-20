@@ -4,7 +4,7 @@ Proyecto de Transformación Digital para el curso de **Sistemas Organizacionales
 
 ---
 
-## 📌 Alcance de la Fase 3: Integración Backend y Portal de Cliente (Integrante 2)
+## Alcance de la Fase 3: Integración Backend y Portal de Cliente (Integrante 2)
 
 Este repositorio contiene la solución completa para el rol de **Integrante 2**, encargada de la capa de comunicación, lógica de negocio y trazabilidad entre la plataforma E-Commerce y el ERP/CRM en la nube:
 
@@ -19,7 +19,7 @@ Este repositorio contiene la solución completa para el rol de **Integrante 2**,
 
 ---
 
-## 🏗️ Arquitectura del Sistema
+## Arquitectura del Sistema
 
 ```
 [ Cliente / Tienda Web ]
@@ -38,7 +38,7 @@ Este repositorio contiene la solución completa para el rol de **Integrante 2**,
 
 ---
 
-## 🌐 Enlaces en Producción (Nube de Azure)
+## Enlaces en Producción (Nube de Azure)
 
 * **Servidor Odoo ERP/CRM:** [http://gamerzone-odoo.northcentralus.cloudapp.azure.com:8069](http://gamerzone-odoo.northcentralus.cloudapp.azure.com:8069)
 * **Base de Datos:** `gamerzone_db`
@@ -47,7 +47,7 @@ Este repositorio contiene la solución completa para el rol de **Integrante 2**,
 
 ---
 
-## 📁 Estructura del Repositorio
+## Estructura del Repositorio
 
 ```text
 SEMI1_G12/
@@ -73,7 +73,7 @@ SEMI1_G12/
 
 ---
 
-## 🚀 Guía de Instalación y Ejecución
+## Guía de Instalación y Ejecución
 
 ### 1. Clonar el Repositorio
 ```bash
@@ -102,7 +102,7 @@ python test_flow.py
 
 ---
 
-## 📄 Documentación Técnica
+## Documentación Técnica
 
-Para ver la especificación completa de los endpoints, mapeo detallado de campos con la base de datos de Odoo y evidencias de ejecución, consulta:
-👉 [Manual Técnico de Integración](docs/manual_tecnico_integracion.md)
+Para ver la especificación completa de los endpoints, mapeo detallado de campos con la base de datos de Odoo y evidencias de ejecución, consultar el documento oficial:
+* [Manual Técnico de Integración](docs/manual_tecnico_integracion.md)

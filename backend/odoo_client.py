@@ -1,8 +1,54 @@
 import xmlrpc.client
 import logging
+from urllib.parse import urlparse
 from config import ODOO_URL, ODOO_DB, ODOO_USER, ODOO_PASSWORD
 
 logger = logging.getLogger(__name__)
+
+
+class TimeoutTransport(xmlrpc.client.Transport):
+    def __init__(self, timeout=20, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.timeout = timeout
+
+    def make_connection(self, host):
+        connection = super().make_connection(host)
+        connection.timeout = self.timeout
+        return connection
+
+
+class TimeoutSafeTransport(xmlrpc.client.SafeTransport):
+    def __init__(self, timeout=20, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.timeout = timeout
+
+    def make_connection(self, host):
+        connection = super().make_connection(host)
+        connection.timeout = self.timeout
+        return connection
+
+
+class FreshServerProxy:
+    """Crea un transporte XML-RPC por llamada.
+
+    ``ServerProxy`` conserva una conexión HTTP interna y no es thread-safe. FastAPI
+    ejecuta endpoints síncronos en varios hilos (especialmente las imágenes), por
+    lo que compartir una sola instancia producía ``Request-sent`` y respuestas 502.
+    """
+
+    def __init__(self, url, transport_class):
+        self.url = url
+        self.transport_class = transport_class
+
+    def __getattr__(self, method_name):
+        def call(*args, **kwargs):
+            proxy = xmlrpc.client.ServerProxy(
+                self.url,
+                transport=self.transport_class(),
+                allow_none=True
+            )
+            return getattr(proxy, method_name)(*args, **kwargs)
+        return call
 
 class OdooClient:
     def __init__(self):
@@ -11,8 +57,9 @@ class OdooClient:
         self.username = ODOO_USER
         self.password = ODOO_PASSWORD
         self.uid = None
-        self.common = xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/common")
-        self.models = xmlrpc.client.ServerProxy(f"{self.url}/xmlrpc/2/object")
+        transport_class = TimeoutSafeTransport if urlparse(self.url).scheme == "https" else TimeoutTransport
+        self.common = FreshServerProxy(f"{self.url}/xmlrpc/2/common", transport_class)
+        self.models = FreshServerProxy(f"{self.url}/xmlrpc/2/object", transport_class)
 
     def authenticate(self):
         try:
@@ -24,6 +71,11 @@ class OdooClient:
             logger.error(f"Error al autenticar en Odoo: {e}")
             raise
 
+    def ping(self):
+        self.ensure_auth()
+        version = self.common.version()
+        return {"uid": self.uid, "server_version": version.get("server_version", "desconocida")}
+
     def ensure_auth(self):
         if not self.uid:
             self.authenticate()
@@ -32,7 +84,7 @@ class OdooClient:
         self.ensure_auth()
         # Query active saleable products
         domain = [('sale_ok', '=', True)]
-        fields = ['id', 'name', 'default_code', 'lst_price', 'qty_available', 'categ_id', 'description_sale', 'image_512']
+        fields = ['id', 'name', 'default_code', 'lst_price', 'qty_available', 'categ_id', 'description_sale']
         products = self.models.execute_kw(
             self.db, self.uid, self.password,
             'product.product', 'search_read',
@@ -49,18 +101,65 @@ class OdooClient:
                 'stock': float(p.get('qty_available', 0)),
                 'category': categ_name,
                 'description': p.get('description_sale') or "",
-                'image': f"data:image/png;base64,{p['image_512']}" if p.get('image_512') else None
+                'image_url': f"/api/products/{p['id']}/image"
             })
         return result
+
+    def get_products_by_ids(self, product_ids):
+        self.ensure_auth()
+        unique_ids = list(dict.fromkeys(int(product_id) for product_id in product_ids))
+        if not unique_ids:
+            return []
+        products = self.models.execute_kw(
+            self.db, self.uid, self.password,
+            'product.product', 'search_read',
+            [[('id', 'in', unique_ids), ('sale_ok', '=', True), ('active', '=', True)]],
+            {'fields': ['id', 'name', 'default_code', 'lst_price', 'qty_available']}
+        )
+        return [{
+            'id': product['id'],
+            'name': product['name'],
+            'sku': product.get('default_code') or f"GZ-{product['id']}",
+            'price': float(product['lst_price']),
+            'stock': float(product.get('qty_available', 0)),
+        } for product in products]
+
+    def get_product_image(self, product_id):
+        self.ensure_auth()
+        records = self.models.execute_kw(
+            self.db, self.uid, self.password,
+            'product.product', 'read',
+            [[product_id], ['image_512', 'write_date']]
+        )
+        if not records or not records[0].get('image_512'):
+            return None
+        return {
+            'content': records[0]['image_512'],
+            'write_date': records[0].get('write_date') or ''
+        }
 
     def get_or_create_customer(self, name, email, phone="", address="", city=""):
         self.ensure_auth()
         existing = self.models.execute_kw(
             self.db, self.uid, self.password,
             'res.partner', 'search',
-            [[('email', '=', email)]]
+            [[('email', '=ilike', email.strip())]],
+            {'limit': 1}
         )
         if existing:
+            values = {
+                'name': name,
+                'email': email.strip().lower(),
+                'phone': phone,
+                'street': address,
+                'city': city,
+                'customer_rank': 1
+            }
+            self.models.execute_kw(
+                self.db, self.uid, self.password,
+                'res.partner', 'write',
+                [existing, values]
+            )
             return existing[0]
 
         partner_id = self.models.execute_kw(
@@ -230,7 +329,7 @@ class OdooClient:
         partner_ids = self.models.execute_kw(
             self.db, self.uid, self.password,
             'res.partner', 'search',
-            [[('email', '=', email)]]
+            [[('email', '=ilike', email.strip())]]
         )
         if not partner_ids:
             return []
@@ -263,12 +362,59 @@ class OdooClient:
             })
         return results
 
+    def get_customer_order_detail(self, order_id, email):
+        self.ensure_auth()
+        partner_ids = self.models.execute_kw(
+            self.db, self.uid, self.password,
+            'res.partner', 'search',
+            [[('email', '=ilike', email.strip())]]
+        )
+        if not partner_ids:
+            return None
+        orders = self.models.execute_kw(
+            self.db, self.uid, self.password,
+            'sale.order', 'search_read',
+            [[('id', '=', order_id), ('partner_id', 'in', partner_ids)]],
+            {'fields': ['id', 'name', 'date_order', 'amount_untaxed', 'amount_tax', 'amount_total', 'state', 'order_line', 'picking_ids'], 'limit': 1}
+        )
+        if not orders:
+            return None
+        order = orders[0]
+        lines = self.models.execute_kw(
+            self.db, self.uid, self.password,
+            'sale.order.line', 'read',
+            [order.get('order_line', []), ['id', 'name', 'product_id', 'product_uom_qty', 'price_unit', 'price_subtotal']]
+        ) if order.get('order_line') else []
+        state_map = {
+            'draft': 'Cotización', 'sent': 'Cotización enviada', 'sale': 'Orden confirmada',
+            'done': 'Completada', 'cancel': 'Cancelada'
+        }
+        return {
+            'id': order['id'],
+            'order_number': order['name'],
+            'date': order['date_order'],
+            'state': order['state'],
+            'state_display': state_map.get(order['state'], order['state']),
+            'subtotal': float(order['amount_untaxed']),
+            'tax': float(order['amount_tax']),
+            'total': float(order['amount_total']),
+            'has_delivery': bool(order.get('picking_ids')),
+            'lines': [{
+                'id': line['id'],
+                'name': line['name'],
+                'product_id': line['product_id'][0] if line.get('product_id') else None,
+                'quantity': float(line['product_uom_qty']),
+                'price_unit': float(line['price_unit']),
+                'subtotal': float(line['price_subtotal'])
+            } for line in lines]
+        }
+
     def get_customer_invoices(self, email):
         self.ensure_auth()
         partner_ids = self.models.execute_kw(
             self.db, self.uid, self.password,
             'res.partner', 'search',
-            [[('email', '=', email)]]
+            [[('email', '=ilike', email.strip())]]
         )
         if not partner_ids:
             return []

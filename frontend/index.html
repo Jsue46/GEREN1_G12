@@ -1,153 +1,18 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Catálogo GamerZone conectado con Odoo ERP y CRM.">
-    <title>GamerZone | Hardware para tu setup</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23007f96'/%3E%3Ctext x='32' y='39' text-anchor='middle' font-family='Arial' font-size='18' font-weight='700' fill='white'%3EGZ%3C/text%3E%3C/svg%3E">
-    <link rel="stylesheet" href="css/style.css">
-</head>
-<body>
-    <header class="navbar">
-        <a href="index.html" class="nav-brand" aria-label="GamerZone, ir al inicio">
-            <span class="logo-badge" aria-hidden="true">GZ</span>
-            <span class="brand-title">Gamer<span>Zone</span></span>
-        </a>
-        <nav class="nav-links" aria-label="Navegación principal">
-            <a href="#catalogo" class="nav-link active">Catálogo</a>
-            <a href="portal.html" class="nav-link">Mis pedidos</a>
-            <button class="nav-link nav-button" type="button" onclick="openRegisterModal()">Crear cuenta</button>
-            <button class="cart-btn" type="button" onclick="openCartModal()" id="cart-toggle-btn" aria-label="Abrir carrito">
-                Carrito <span class="cart-badge" id="cart-count">0</span>
-            </button>
-        </nav>
-    </header>
-
-    <main>
-        <section class="hero" aria-labelledby="hero-title">
-            <div class="hero-copy">
-                <p class="eyebrow">Catálogo conectado con Odoo</p>
-                <h1 id="hero-title">Tu próximo setup empieza aquí.</h1>
-                <p>Explora hardware gamer, arma tu carrito y genera una cotización lista para convertirse en orden.</p>
-                <a class="primary-link" href="#catalogo">Ver catálogo</a>
-            </div>
-            <div class="hero-media">
-                <img src="assets/gamerzone-hero.webp" alt="Teclado, mouse, audífonos y control gamer sobre un escritorio oscuro" width="1536" height="1024" fetchpriority="high">
-                <div class="hero-stat"><strong id="catalog-count">30+</strong><span>productos disponibles</span></div>
-            </div>
-        </section>
-
-        <section class="store-benefits" aria-label="Beneficios de compra">
-            <p><strong>Stock sincronizado</strong><span>Existencias consultadas desde el ERP</span></p>
-            <p><strong>Cotización inmediata</strong><span>Guardada directamente en Odoo</span></p>
-            <p><strong>Trazabilidad completa</strong><span>Consulta órdenes y facturas en el portal</span></p>
-        </section>
-
-        <section class="catalog-section" id="catalogo" aria-labelledby="catalog-title">
-            <div class="catalog-heading">
-                <div>
-                    <h2 id="catalog-title">Catálogo GamerZone</h2>
-                    <p id="catalog-status" aria-live="polite">Consultando productos disponibles...</p>
-                </div>
-                <label class="search-box" for="search-input">
-                    <span>Buscar</span>
-                    <input type="search" id="search-input" class="search-input" placeholder="Ej. teclado mecánico" autocomplete="off">
-                </label>
-            </div>
-            <div class="filter-pills" id="filter-pills" aria-label="Filtrar por categoría"></div>
-            <div class="products-grid" id="products-grid" aria-live="polite"></div>
-        </section>
-    </main>
-
-    <footer class="site-footer">
-        <div><span class="logo-badge small" aria-hidden="true">GZ</span><strong>GamerZone</strong></div>
-        <p>Hardware gamer con operaciones sincronizadas en Odoo ERP y CRM.</p>
-        <a href="portal.html">Consultar mis pedidos</a>
-    </footer>
-
-    <div class="modal-overlay" id="cart-modal" role="dialog" aria-modal="true" aria-labelledby="cart-title">
-        <section class="modal-card cart-panel">
-            <div class="modal-header">
-                <div><p class="modal-kicker">Tu selección</p><h2 class="modal-title" id="cart-title">Carrito de compras</h2></div>
-                <button class="close-btn" type="button" onclick="closeModal('cart-modal')" aria-label="Cerrar carrito">×</button>
-            </div>
-            <div id="cart-items-container" class="cart-items"></div>
-            <div class="cart-summary"><span>Total estimado</span><strong id="cart-total">Q0.00</strong></div>
-            <button class="submit-btn" type="button" id="quote-cart-btn" onclick="openQuoteModal()">Generar cotización</button>
-            <button class="text-btn danger-text" type="button" id="clear-cart-btn" onclick="clearCart()">Vaciar carrito</button>
-        </section>
-    </div>
-
-    <div class="modal-overlay" id="register-modal" role="dialog" aria-modal="true" aria-labelledby="register-title">
-        <section class="modal-card">
-            <div class="modal-header">
-                <div><p class="modal-kicker">Nuevo cliente</p><h2 class="modal-title" id="register-title">Crea tu cuenta</h2></div>
-                <button class="close-btn" type="button" onclick="closeModal('register-modal')" aria-label="Cerrar registro">×</button>
-            </div>
-            <p class="modal-intro">Tus datos se registrarán como cliente en Odoo y se usarán para cotizaciones futuras.</p>
-            <form id="register-form" class="customer-form" novalidate>
-                <div class="form-group full"><label for="reg-name">Nombre completo</label><input id="reg-name" name="name" class="form-control" required minlength="3" autocomplete="name"><small class="field-error"></small></div>
-                <div class="form-group full"><label for="reg-email">Correo electrónico</label><input id="reg-email" name="email" type="email" class="form-control" required autocomplete="email"><small class="field-error"></small></div>
-                <div class="form-group"><label for="reg-phone">Teléfono</label><input id="reg-phone" name="phone" type="tel" class="form-control" required autocomplete="tel"><small class="field-error"></small></div>
-                <div class="form-group"><label for="reg-city">Ciudad</label><input id="reg-city" name="city" class="form-control" value="Guatemala" required autocomplete="address-level2"><small class="field-error"></small></div>
-                <div class="form-group full"><label for="reg-address">Dirección</label><input id="reg-address" name="address" class="form-control" required autocomplete="street-address"><small class="field-error"></small></div>
-                <button class="submit-btn full" type="submit" id="register-btn">Crear cuenta</button>
-            </form>
-        </section>
-    </div>
-
-    <div class="modal-overlay" id="quote-modal" role="dialog" aria-modal="true" aria-labelledby="quote-title">
-        <section class="modal-card">
-            <div class="modal-header">
-                <div><p class="modal-kicker">Pedido preliminar</p><h2 class="modal-title" id="quote-title">Generar cotización</h2></div>
-                <button class="close-btn" type="button" onclick="closeModal('quote-modal')" aria-label="Cerrar cotización">×</button>
-            </div>
-            <p class="modal-intro">La cotización quedará en borrador dentro del ERP. Podrás convertirla en orden al confirmar.</p>
-            <form id="quote-form" class="customer-form" novalidate>
-                <div class="form-group full"><label for="quote-name">Nombre completo</label><input id="quote-name" name="name" class="form-control" required minlength="3" autocomplete="name"><small class="field-error"></small></div>
-                <div class="form-group full"><label for="quote-email">Correo electrónico</label><input id="quote-email" name="email" type="email" class="form-control" required autocomplete="email"><small class="field-error"></small></div>
-                <div class="form-group"><label for="quote-phone">Teléfono</label><input id="quote-phone" name="phone" type="tel" class="form-control" required autocomplete="tel"><small class="field-error"></small></div>
-                <div class="form-group"><label for="quote-city">Ciudad</label><input id="quote-city" name="city" class="form-control" value="Guatemala" required autocomplete="address-level2"><small class="field-error"></small></div>
-                <div class="form-group full"><label for="quote-address">Dirección de entrega</label><input id="quote-address" name="address" class="form-control" required autocomplete="street-address"><small class="field-error"></small></div>
-                <div class="quote-total full"><span>Total de la cotización</span><strong id="quote-total-value">Q0.00</strong></div>
-                <button class="submit-btn full" type="submit" id="create-quote-btn">Guardar cotización en Odoo</button>
-            </form>
-        </section>
-    </div>
-
-    <div class="modal-overlay" id="quote-success-modal" role="dialog" aria-modal="true" aria-labelledby="quote-success-title">
-        <section class="modal-card">
-            <div class="success-mark" aria-hidden="true">✓</div>
-            <p class="modal-kicker">Cotización creada</p>
-            <h2 class="modal-title" id="quote-success-title">Tu propuesta ya está en Odoo.</h2>
-            <p class="modal-intro">Revísala y conviértela en orden para reservar inventario y generar la factura.</p>
-            <dl class="receipt-box">
-                <div><dt>Número</dt><dd id="quote-number">-</dd></div>
-                <div><dt>Estado ERP</dt><dd>Cotización</dd></div>
-                <div><dt>Total</dt><dd id="quote-result-total">Q0.00</dd></div>
-            </dl>
-            <button class="submit-btn" type="button" id="convert-quote-btn" onclick="convertCurrentQuote()">Convertir en orden</button>
-            <button class="text-btn" type="button" onclick="finishQuoteLater()">Guardar para después</button>
-        </section>
-    </div>
-
-    <div class="modal-overlay" id="order-success-modal" role="dialog" aria-modal="true" aria-labelledby="order-success-title">
-        <section class="modal-card">
-            <div class="success-mark" aria-hidden="true">✓</div>
-            <p class="modal-kicker">Orden confirmada</p>
-            <h2 class="modal-title" id="order-success-title">Tu compra quedó registrada.</h2>
-            <dl class="receipt-box">
-                <div><dt>Orden de venta</dt><dd id="result-order">-</dd></div>
-                <div><dt>Factura</dt><dd id="result-invoice">-</dd></div>
-                <div><dt>Total</dt><dd id="result-total">Q0.00</dd></div>
-            </dl>
-            <button class="submit-btn" type="button" onclick="goToPortal()">Ver en mi portal</button>
-            <button class="text-btn" type="button" onclick="closeModal('order-success-modal')">Seguir comprando</button>
-        </section>
-    </div>
-
-    <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
-    <script src="js/app.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#050910" />
+    <meta name="description" content="Hardware gamer con catálogo, cotizaciones y pedidos conectados a Odoo." />
+    <meta property="og:title" content="GamerZone | Hardware para jugar mejor" />
+    <meta property="og:description" content="Productos gamer con stock y cotizaciones conectados a Odoo." />
+    <meta property="og:image" content="/store/assets/gamerzone-hero.webp" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23050910'/%3E%3Ctext x='32' y='39' text-anchor='middle' font-family='Arial' font-size='18' font-weight='700' fill='%230d72dc'%3EGZ%3C/text%3E%3C/svg%3E" />
+    <title>GamerZone | Hardware para jugar mejor</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

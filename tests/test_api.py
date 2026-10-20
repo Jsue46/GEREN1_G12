@@ -56,6 +56,9 @@ class EcommerceApiTests(unittest.TestCase):
 
     def test_quote_is_created_as_draft(self):
         self.fake_odoo.get_or_create_customer.return_value = 91
+        self.fake_odoo.get_products_by_ids.return_value = [{
+            "id": 17, "name": "Teclado Mecánico TKL", "price": 749.0, "stock": 8
+        }]
         self.fake_odoo.create_quote_lead.return_value = 44
         self.fake_odoo.create_sale_order.return_value = 120
         self.fake_odoo.get_sale_order.return_value = {
@@ -67,6 +70,23 @@ class EcommerceApiTests(unittest.TestCase):
         self.assertEqual(body["quote_number"], "S00120")
         self.assertEqual(body["state"], "draft")
         self.assertEqual(body["total"], 1498.0)
+
+    def test_quote_uses_odoo_price_instead_of_browser_price(self):
+        self.fake_odoo.get_products_by_ids.return_value = [{
+            "id": 17, "name": "Teclado Mecánico TKL", "price": 749.0, "stock": 8
+        }]
+        self.fake_odoo.get_or_create_customer.return_value = 91
+        self.fake_odoo.create_quote_lead.return_value = 44
+        self.fake_odoo.create_sale_order.return_value = 120
+        self.fake_odoo.get_sale_order.return_value = {
+            "id": 120, "name": "S00120", "state": "draft", "amount_total": 1498.0
+        }
+        tampered_item = {**ITEM, "price_unit": 1.0, "name": "Producto manipulado"}
+        response = self.client.post("/api/quotes", json={"customer": CUSTOMER, "items": [tampered_item]})
+        self.assertEqual(response.status_code, 201)
+        sent_items = self.fake_odoo.create_sale_order.call_args.kwargs["items"]
+        self.assertEqual(sent_items[0]["price_unit"], 749.0)
+        self.assertEqual(sent_items[0]["name"], "Teclado Mecánico TKL")
 
     def test_quote_conversion_confirms_and_invoices(self):
         self.fake_odoo.get_sale_order.return_value = {
@@ -90,6 +110,23 @@ class EcommerceApiTests(unittest.TestCase):
         self.assertEqual(body["order_state"], "sale")
         self.assertEqual(body["invoice"]["name"], "INV/2026/0031")
         self.fake_odoo.mark_lead_won.assert_called_once_with(44)
+
+    def test_confirmed_order_stays_successful_when_invoice_fails(self):
+        self.fake_odoo.get_sale_order.return_value = {
+            "id": 120, "name": "S00120", "state": "draft", "amount_total": 1498.0,
+            "partner_id": [91, "María Fernanda López"], "opportunity_id": False,
+        }
+        self.fake_odoo.quote_belongs_to_email.return_value = True
+        self.fake_odoo.confirm_sale_order.return_value = {
+            "name": "S00120", "state": "sale", "picking_ids": [77]
+        }
+        self.fake_odoo.create_and_post_invoice.side_effect = RuntimeError("Diario contable no configurado")
+        response = self.client.post("/api/quotes/120/convert", json={"email": CUSTOMER["email"]})
+        self.assertEqual(response.status_code, 200)
+        body = response.json()["data"]
+        self.assertEqual(body["order_state"], "sale")
+        self.assertIsNone(body["invoice"])
+        self.assertIn("factura quedó pendiente", body["invoice_warning"])
 
     def test_empty_quote_is_rejected(self):
         response = self.client.post("/api/quotes", json={"customer": CUSTOMER, "items": []})

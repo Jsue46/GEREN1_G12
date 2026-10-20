@@ -11,21 +11,22 @@ Este manual explica cómo navegar el catálogo, administrar el carrito, registra
 
 ## 2. Acceso al sitio
 
-1. Inicie el middleware desde la carpeta `backend`:
+1. Compile el frontend e inicie el middleware:
 
    ```bash
-   pip install -r requirements.txt
-   python main.py
+   npm --prefix frontend install
+   npm --prefix frontend run build
+   cd backend && python main.py
    ```
 
-2. Abra `http://localhost:8000/store/index.html` en un navegador moderno.
+2. Abra `http://localhost:8000/store/` en un navegador moderno.
 3. Verifique que la página muestre el número de productos sincronizados. El catálogo actual devuelve 54 productos, por encima del mínimo solicitado de 30.
 
 ![Página de inicio de GamerZone](capturas/01_inicio.png)
 
 ## 3. Navegar y buscar productos
 
-1. Seleccione **Ver catálogo** o desplácese hasta la sección **Catálogo GamerZone**.
+1. Seleccione **Explorar catálogo** o use **Catálogo** en la navegación.
 2. Escriba el nombre, categoría o SKU en el campo **Buscar**.
 3. Use los filtros de categoría para reducir los resultados.
 4. Revise el precio, SKU y existencia reportada por Odoo.
@@ -39,7 +40,7 @@ Si no hay coincidencias, el sitio muestra un estado vacío. Si Odoo no está dis
 
 1. Presione **Carrito** en la navegación superior.
 2. Use los botones `−` y `+` para modificar la cantidad.
-3. Seleccione **Quitar** para eliminar una línea específica.
+3. Use el icono de papelera para eliminar una línea, o abra **Ver carrito completo** para administrar el pedido con más espacio.
 4. Revise el total estimado, calculado automáticamente.
 5. Use **Vaciar carrito** para eliminar todos los productos.
 6. Presione **Generar cotización** para continuar.
@@ -65,9 +66,9 @@ Los datos registrados se guardan localmente para completar automáticamente futu
 
 1. Agregue al menos un producto al carrito.
 2. Abra el carrito y seleccione **Generar cotización**.
-3. Confirme o complete los datos del cliente.
-4. Revise el total.
-5. Presione **Guardar cotización en Odoo**.
+3. Confirme o complete los datos del cliente y presione **Revisar cotización**.
+4. Revise productos, cantidades, datos y total estimado.
+5. Presione **Guardar cotización**.
 
 ![Formulario para generar una cotización](capturas/04_generar_cotizacion.png)
 
@@ -80,15 +81,15 @@ El sistema realiza las siguientes acciones:
 
 ![Confirmación de cotización creada](capturas/05_cotizacion_creada.png)
 
-La opción **Guardar para después** conserva la cotización en Odoo sin confirmar la venta.
+Mientras no seleccione **Convertir en orden**, el documento permanece como cotización en Odoo y puede consultarse desde **Mis pedidos**.
 
 ## 7. Convertir la cotización en orden
 
 1. En la confirmación de cotización, presione **Convertir en orden**.
 2. El sistema verifica que el correo corresponda al cliente de la cotización.
-3. Odoo confirma la orden, crea la reserva de inventario y genera la factura.
+3. Odoo confirma la orden, crea la reserva de inventario e intenta generar la factura.
 4. El CRM actualiza la oportunidad a 100 %.
-5. El sitio muestra los números de orden y factura.
+5. El sitio abre el detalle de la orden con sus líneas y totales oficiales. Si la configuración contable impide facturar, la orden permanece confirmada y se muestra una advertencia para completar la factura desde Odoo.
 
 ![Orden confirmada y factura generada](capturas/06_orden_confirmada.png)
 
@@ -99,10 +100,10 @@ Esta operación no puede repetirse sobre la misma cotización. Si ya fue confirm
 1. Presione **Mis pedidos**.
 2. Ingrese el correo utilizado en el registro o la cotización.
 3. Presione **Consultar**.
-4. Revise la pestaña **Mis Pedidos**. Las cotizaciones muestran el estado **Cotización** y las ventas confirmadas muestran **Orden Confirmada**.
-5. Abra **Mis Facturas** para consultar documentos contables y estado de pago.
+4. Revise la pestaña **Pedidos**. Las cotizaciones muestran el estado **Cotización** y las ventas confirmadas muestran **Orden confirmada**.
+5. Abra **Facturas** para consultar documentos contables y estado de pago.
 
-Después de convertir una cotización, el botón **Ver en mi portal** abre esta página con el correo ya completado.
+Después de convertir una cotización, el sitio abre su detalle. Use **Volver al portal** para regresar al historial con el correo ya completado.
 
 ## 9. Mensajes frecuentes
 

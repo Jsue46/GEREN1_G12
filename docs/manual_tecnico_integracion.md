@@ -289,8 +289,11 @@ Consultando facturas encontradas en el portal:
 
 ### Instalación de Dependencias
 ```bash
-cd backend
-pip install -r requirements.txt
+python -m venv .venv
+source .venv/bin/activate
+pip install -r backend/requirements.txt
+npm --prefix frontend install
+npm --prefix frontend run build
 ```
 
 ### Ejecutar el Middleware API
@@ -299,10 +302,9 @@ python main.py
 ```
 * El servidor iniciará en `http://localhost:8000`.
 * Documentación interactiva Swagger: `http://localhost:8000/docs`.
-* Tienda Web y Portal integrados: `http://localhost:8000/store/index.html`.
+* Tienda Web y Portal integrados: `http://localhost:8000/store/`.
 
 ### Ejecutar la Suite de Pruebas de Flujo Completo
 ```bash
-cd tests
-python test_flow.py
+python tests/test_flow.py
 ```

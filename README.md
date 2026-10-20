@@ -46,7 +46,7 @@ Este repositorio contiene el sitio E-Commerce y la capa de integración con Odoo
 * **Servidor Odoo ERP/CRM:** [http://gamerzone-odoo.northcentralus.cloudapp.azure.com:8069](http://gamerzone-odoo.northcentralus.cloudapp.azure.com:8069)
 * **Base de Datos:** `gamerzone_db`
 * **Swagger API Docs (Local):** `http://localhost:8000/docs`
-* **Tienda Web y Portal (Local):** `http://localhost:8000/store/index.html`
+* **Tienda Web y Portal (Local):** `http://localhost:8000/store/`
 
 ---
 
@@ -60,14 +60,14 @@ SEMI1_G12/
 │   ├── main.py                # Servidor FastAPI con endpoints REST y CORS
 │   └── requirements.txt       # Dependencias de Python
 ├── frontend/
-│   ├── index.html             # Catálogo, carrito, registro y cotizaciones
-│   ├── portal.html            # Portal de consulta de pedidos y facturas por correo
-│   ├── assets/                # Imagen principal del sitio
-│   ├── css/
-│   │   └── style.css          # Diseño responsive claro y oscuro
-│   └── js/
-│       ├── app.js             # Lógica de catálogo, carrito, registro y cotización
-│       └── portal.js          # Lógica de consulta a GET /api/portal/*
+│   ├── src/                   # Aplicación React + TypeScript
+│   │   ├── components/        # Navegación, productos, formularios y carrito
+│   │   ├── pages/             # Catálogo, cuenta, cotización y portal
+│   │   ├── lib/api.ts         # Cliente tipado de la API FastAPI
+│   │   └── store/             # Estado persistente con Zustand
+│   ├── public/                # Recursos estáticos
+│   ├── package.json           # Dependencias y comandos del frontend
+│   └── vite.config.ts         # Build Vite bajo /store/
 ├── tests/
 │   ├── test_api.py            # Pruebas aisladas de los endpoints web
 │   └── test_flow.py           # Script de prueba integral paso a paso
@@ -88,22 +88,35 @@ git clone https://github.com/Jsue46/SEMI1_G12.git
 cd SEMI1_G12
 ```
 
-### 2. Instalar Dependencias
+### 2. Instalar dependencias del backend
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r backend/requirements.txt
+```
+
+### 3. Compilar el frontend
+```bash
+cd frontend
+npm install
+npm run build
+cd ..
+```
+
+Para desarrollo con recarga automática puede ejecutar `npm run dev` dentro de `frontend`; Vite redirige `/api` al puerto 8000.
+
+### 4. Iniciar el Middleware
 ```bash
 cd backend
-pip install -r requirements.txt
-```
-
-### 3. Iniciar el Middleware
-```bash
 python main.py
 ```
-El servicio estará disponible en `http://localhost:8000`.
+El servicio estará disponible en `http://localhost:8000` y la tienda en `http://localhost:8000/store/`.
 
-### 4. Ejecutar las pruebas del sitio
+### 5. Ejecutar las pruebas del sitio
 En otra terminal:
 ```bash
-python -m unittest tests/test_api.py
+source .venv/bin/activate
+python -m unittest tests.test_api -v
 ```
 
 La prueba integral `tests/test_flow.py` crea registros reales en Odoo. Ejecútela solo cuando necesite validar el flujo completo de integración.

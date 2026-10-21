@@ -6,7 +6,7 @@
 
 **Módulo:** Frontend E-Commerce conectado con Odoo
 
-**Fecha:** 20 de octubre de 2026
+**Fecha:** 21 de octubre de 2026
 
 ## 1. Objetivo
 
@@ -18,6 +18,7 @@ Este manual explica cómo utilizar la tienda GamerZone para:
 - registrar o actualizar los datos de un cliente;
 - generar una cotización oficial en Odoo;
 - convertir una cotización en orden de venta;
+- adjuntar una Tarjeta y realizar un pago simulado;
 - consultar cotizaciones, órdenes y facturas desde el portal de cliente.
 
 El sitio es responsive y puede utilizarse desde una computadora, tableta o teléfono.
@@ -37,7 +38,11 @@ cd frontend
 npm install
 npm run build
 cd ..
+
+cp .env.example .env
 ```
+
+Configure en `.env` la conexión y credenciales de integración de Odoo antes de iniciar el backend.
 
 ### 2.2. Iniciar la aplicación
 
@@ -70,6 +75,8 @@ La página principal presenta la identidad visual de GamerZone en azul oscuro y 
 - **Buscador:** permite buscar por nombre o SKU.
 - **Carrito:** muestra la cantidad total de unidades agregadas.
 
+En teléfonos aparece una barra inferior con accesos permanentes a Inicio, Catálogo, Carrito, Pedidos y Cuenta.
+
 La página también presenta categorías, promociones, productos recomendados y accesos al portal.
 
 ![Página principal actual de GamerZone](capturas/01_inicio.png)
@@ -84,9 +91,11 @@ La página también presenta categorías, promociones, productos recomendados y 
    - precio menor;
    - precio mayor;
    - orden alfabético.
-5. Si existen más resultados, seleccione **Ver más productos**.
+5. Active **Solo disponibles** para ocultar productos agotados.
+6. Use **Limpiar filtros** para regresar al catálogo completo.
+7. Si existen más resultados, seleccione **Ver más productos**.
 
-Cada tarjeta muestra categoría, existencia, nombre, SKU, precio oficial y acceso al detalle. Los precios y existencias provienen del catálogo actual de Odoo.
+Cada tarjeta muestra categoría, existencia, nombre, SKU, precio oficial y acceso al detalle. El indicador cambia entre disponibilidad normal, últimas unidades y agotado. Los precios y existencias provienen del catálogo actual de Odoo.
 
 ![Catálogo sincronizado con búsqueda, categorías y ordenamiento](capturas/02_catalogo.png)
 
@@ -151,13 +160,13 @@ Para cotizar debe existir al menos un producto en el carrito.
 
 1. Abra el carrito y seleccione **Generar cotización**.
 2. Confirme o complete los datos del cliente.
-3. Presione **Revisar cotización**.
+3. Presione **Revisar productos**.
 4. Revise productos, cantidades, cliente y total estimado.
-5. Presione **Guardar cotización**.
+5. Presione **Solo cotizar**.
 
 ![Revisión previa a la generación de la cotización](capturas/04_generar_cotizacion.png)
 
-El sistema ejecuta estas acciones:
+El sistema ejecuta estas acciones sin confirmar la venta ni modificar inventario:
 
 1. identifica o actualiza al cliente en Odoo;
 2. vuelve a consultar cada producto y su precio oficial;
@@ -167,7 +176,17 @@ El sistema ejecuta estas acciones:
 
 El navegador no envía un precio confiable a Odoo; el backend reconstruye las líneas con los valores oficiales para evitar cotizaciones manipuladas.
 
-## 9. Cotización creada
+El backend también verifica que la cantidad solicitada no supere la existencia actual. Esta comprobación se repite al comprar porque el stock puede cambiar después de guardar una cotización.
+
+## 9. Adjuntar una Tarjeta
+
+1. Abra **Crear cuenta** y registre sus datos.
+2. En **Métodos de pago**, complete titular, número, mes, año y CVV.
+3. Presione **Adjuntar tarjeta**.
+
+Puede utilizar `4242 4242 4242 4242` en la demostración. El servicio no se conecta con un banco y no limita el saldo. El número completo y el CVV se utilizan únicamente para validar el formulario y se descartan; solamente se conservan la marca, los últimos cuatro dígitos y el vencimiento.
+
+## 10. Cotización creada
 
 Después de guardar, se muestra el número asignado por Odoo, su estado y total oficial.
 
@@ -177,16 +196,22 @@ En esta pantalla puede:
 
 - seleccionar **Ver detalle** para consultar las líneas guardadas;
 - dejar la cotización en borrador y consultarla después en **Mis pedidos**;
-- seleccionar **Convertir en orden** para confirmar la compra.
+- seleccionar una tarjeta y **Pagar y convertir en orden** para confirmar la compra.
 
-## 10. Convertir la cotización en orden
+## 11. Comprar o convertir la cotización en orden
 
-1. Presione **Convertir en orden**.
-2. El backend verifica que el correo corresponda al cliente propietario de la cotización.
-3. Odoo confirma la `sale.order` y genera la reserva de inventario.
-4. La oportunidad de CRM se actualiza a 100 %.
-5. El sistema intenta crear y publicar la factura.
-6. El sitio abre el detalle de la orden confirmada.
+1. Seleccione una Tarjeta y presione **Comprar y pagar** o **Pagar y convertir en orden**.
+2. Revise productos, unidades, total y tarjeta en la confirmación final.
+3. Presione **Confirmar y pagar**. Puede utilizar **Volver** si necesita corregir algo.
+4. El backend verifica que el correo corresponda al cliente propietario de la cotización.
+5. El backend vuelve a comprobar la existencia. Si no alcanza, rechaza la compra sin confirmarla.
+6. Odoo confirma la `sale.order`, reserva el inventario y valida el despacho para descontar la existencia física.
+7. La oportunidad de CRM se actualiza a 100 %.
+8. El servicio registra un pago educativo aprobado y genera un recibo `SIM-...`.
+9. El sistema intenta crear y publicar la factura.
+10. El sitio abre el detalle de la orden confirmada y presenta su trazabilidad.
+
+![Confirmación final antes de afectar el inventario](capturas/05_confirmar_compra.png)
 
 ![Detalle de la orden confirmada](capturas/06_orden_confirmada.png)
 
@@ -194,18 +219,18 @@ El detalle incluye estado, productos, cantidades, precios, subtotal, impuestos y
 
 Si la orden se confirma pero la configuración contable impide crear la factura, el sitio conserva la orden confirmada y muestra una advertencia para completar la facturación desde Odoo. Esto evita repetir accidentalmente la confirmación.
 
-## 11. Portal de cliente: pedidos y cotizaciones
+## 12. Portal de cliente: pedidos y cotizaciones
 
 1. Seleccione **Mis pedidos**.
 2. Ingrese el mismo correo utilizado durante el registro o la cotización.
 3. Presione **Consultar**.
 4. Abra la pestaña **Pedidos**.
 
-La lista diferencia cotizaciones, cotizaciones enviadas, órdenes confirmadas, órdenes completadas y documentos cancelados. Seleccione una fila para abrir su detalle.
+El resumen superior muestra cuántos documentos, facturas y pagos existen. La lista diferencia cotizaciones, cotizaciones enviadas, órdenes confirmadas, órdenes completadas y documentos cancelados. Puede buscar por número o estado y filtrar entre cotizaciones y pedidos confirmados. Seleccione una fila para abrir su detalle.
 
 ![Portal con cotizaciones y órdenes](capturas/08_portal_pedidos.png)
 
-## 12. Portal de cliente: facturas
+## 13. Portal de cliente: facturas y pagos simulados
 
 Dentro del portal, seleccione **Facturas**. Se muestran:
 
@@ -218,7 +243,9 @@ Dentro del portal, seleccione **Facturas**. Se muestran:
 
 El portal actual identifica al cliente mediante su correo. No utiliza usuario y contraseña porque la autenticación no forma parte del alcance original del Integrante 1.
 
-## 13. Administración del sistema
+La pestaña **Pagos simulados** muestra el recibo, la orden, la tarjeta enmascarada, el estado aprobado y el total. Este registro es académico y no representa una transacción bancaria real.
+
+## 14. Administración del sistema
 
 La tienda no incluye un panel administrativo independiente. Los responsables del negocio administran la información directamente desde Odoo:
 
@@ -228,7 +255,7 @@ http://40.116.83.248:8069/web
 
 Desde Odoo se gestionan productos, clientes, CRM, cotizaciones, órdenes, inventario y facturas. Las credenciales administrativas nunca deben introducirse en el frontend público.
 
-## 14. Mensajes frecuentes
+## 15. Mensajes frecuentes
 
 | Mensaje | Significado | Acción recomendada |
 |---|---|---|
@@ -237,11 +264,13 @@ Desde Odoo se gestionan productos, clientes, CRM, cotizaciones, órdenes, invent
 | Odoo tardó demasiado en responder | La conexión superó el tiempo de espera | Espere unos segundos e intente nuevamente |
 | Ingresa un correo válido | El formato del correo no es correcto | Corrija el correo antes de continuar |
 | Productos no disponibles | Un producto fue desactivado en Odoo | Retírelo del carrito o actualice el catálogo |
+| Stock insuficiente | La cantidad solicitada supera la existencia actual | Reduzca la cantidad según lo indicado por el sistema |
+| La tarjeta seleccionada no pertenece a este cliente | Se intentó utilizar otro método de pago | Seleccione una tarjeta adjunta al correo actual |
 | El correo no corresponde a esta cotización | El documento pertenece a otro contacto | Utilice el correo con el que se creó la cotización |
 | La cotización ya fue convertida | La orden ya está confirmada o cancelada | Consulte el documento desde **Mis pedidos** |
 | La factura quedó pendiente | La orden fue confirmada, pero Odoo no pudo facturar | Revise la configuración contable desde Odoo |
 
-## 15. Flujo completo resumido
+## 16. Flujo completo resumido
 
 ```text
 Inicio
@@ -249,8 +278,8 @@ Inicio
   -> Carrito
   -> Registro o identificación del cliente
   -> Revisión
-  -> Cotización en Odoo
-  -> Conversión en orden
-  -> Reserva de inventario y facturación
-  -> Portal de pedidos y facturas
+  -> Opción A: cotización en Odoo, sin movimiento de stock
+  -> Opción B: validación de stock y pago educativo
+  -> Orden, despacho de inventario y facturación
+  -> Portal de pedidos, facturas y pagos simulados
 ```

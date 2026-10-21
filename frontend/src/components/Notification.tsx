@@ -11,5 +11,5 @@ export function Notification() {
     return () => window.clearTimeout(timer);
   }, [notice, clearNotice]);
   if (!notice) return null;
-  return <div className={`notification ${notice.tone}`} role="status">{notice.tone === "success" ? <CheckCircle size={20} /> : <WarningCircle size={20} />}<span>{notice.message}</span><button onClick={clearNotice} aria-label="Cerrar mensaje"><X size={16} /></button></div>;
+  return <div className="toast toast-end toast-bottom notification-wrap"><div className={`alert alert-soft notification ${notice.tone === "success" ? "alert-success success" : "alert-error error"}`} role="status">{notice.tone === "success" ? <CheckCircle size={20} /> : <WarningCircle size={20} />}<span>{notice.message}</span><button className="btn btn-ghost btn-circle btn-xs" onClick={clearNotice} aria-label="Cerrar mensaje"><X size={16} /></button></div></div>;
 }

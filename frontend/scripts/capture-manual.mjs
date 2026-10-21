@@ -34,6 +34,28 @@ const quote = {
   customer_email: customer.email,
   total: 1398
 };
+const paymentMethod = {
+  id: "pm_sim_manual",
+  email: customer.email,
+  holder_name: customer.name,
+  brand: "Visa",
+  last4: "4242",
+  expiry_month: 12,
+  expiry_year: 2099,
+  created_at: "2026-10-20T10:00:00Z"
+};
+const payment = {
+  id: "pay_sim_manual",
+  receipt: "SIM-20261020-DEMO1234",
+  amount: 1398,
+  currency: "GTQ",
+  status: "approved",
+  sale_order_id: 120,
+  order_number: "S00120",
+  invoice_id: 31,
+  created_at: "2026-10-20T10:30:00Z",
+  card: { brand: "Visa", last4: "4242" }
+};
 const order = {
   id: 120,
   order_number: "S00120",
@@ -57,10 +79,13 @@ await page.route("**/api/quotes", async (route) => {
   if (route.request().method() !== "POST") return route.continue();
   await route.fulfill({ status: 201, contentType: "application/json", body: JSON.stringify({ success: true, data: quote }) });
 });
+await page.route("**/api/payment-methods?*", async (route) => {
+  await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, payment_methods: [paymentMethod] }) });
+});
 await page.route("**/api/quotes/120/convert", async (route) => {
   await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
     success: true,
-    data: { sale_order_id: 120, order_number: "S00120", order_state: "sale", total: 1398, invoice: { id: 31, name: "INV/2026/0031" }, invoice_warning: null, customer_email: customer.email }
+    data: { sale_order_id: 120, order_number: "S00120", order_state: "sale", total: 1398, invoice: { id: 31, name: "INV/2026/0031" }, invoice_warning: null, customer_email: customer.email, payment }
   }) });
 });
 await page.route("**/api/portal/orders/120?*", async (route) => {
@@ -74,8 +99,11 @@ await page.route("**/api/portal/orders?*", async (route) => {
 });
 await page.route("**/api/portal/invoices?*", async (route) => {
   await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, invoices: [
-    { id: 31, invoice_number: "INV/2026/0031", date: "2026-10-20", total: 1398, state: "posted", state_display: "Emitida", payment_state: "not_paid", payment_display: "Pendiente de pago" }
+    { id: 31, invoice_number: "INV/2026/0031", date: "2026-10-20", total: 1398, state: "posted", state_display: "Emitida", payment_state: "not_paid", payment_display: "Pagada (simulación educativa)", simulated_payment: true }
   ] }) });
+});
+await page.route("**/api/portal/payments?*", async (route) => {
+  await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, payments: [payment] }) });
 });
 
 async function open(path) {
@@ -100,7 +128,7 @@ await page.locator(".product-detail").waitFor();
 await capture("07_detalle_producto.png", false);
 
 await open("/catalogo");
-await page.locator(".product-card .product-action button").first().click();
+await page.locator(".product-card .product-action button:enabled").first().click();
 await page.locator(".cart-button").click();
 await page.locator(".cart-drawer").waitFor();
 await capture("02_carrito.png", false);
@@ -117,22 +145,25 @@ await page.getByText("Tus datos quedaron registrados en Odoo.").waitFor();
 await capture("03_registro_cliente.png", false);
 
 await open("/cotizacion");
-await page.getByRole("button", { name: "Revisar cotización" }).click();
-await page.getByText("Resumen de cotización").waitFor();
+await page.getByRole("button", { name: "Revisar productos" }).click();
+await page.getByRole("heading", { name: "Resumen" }).waitFor();
 await capture("04_generar_cotizacion.png", false);
 
-await page.getByRole("button", { name: /Guardar cotización/ }).click();
+await page.getByRole("button", { name: /Solo cotizar/ }).click();
 await page.getByText("S00120").waitFor();
 await capture("05_cotizacion_creada.png", false);
 
-await page.getByRole("button", { name: "Convertir en orden" }).click();
+await page.getByRole("button", { name: "Pagar y convertir en orden" }).click();
+await page.getByRole("heading", { name: "Revisa antes de pagar" }).waitFor();
+await capture("05_confirmar_compra.png", false);
+await page.getByRole("button", { name: "Confirmar y pagar" }).click();
 await page.getByText("Orden confirmada en Odoo").waitFor();
 await capture("06_orden_confirmada.png");
 
 await open(`/portal?email=${encodeURIComponent(customer.email)}`);
 await page.getByText("S00119").waitFor();
 await capture("08_portal_pedidos.png", false);
-await page.getByRole("button", { name: "Facturas" }).click();
+await page.getByRole("tab", { name: "Facturas" }).click();
 await page.getByText("INV/2026/0031").waitFor();
 await capture("09_portal_facturas.png", false);
 

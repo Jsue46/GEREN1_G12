@@ -20,7 +20,7 @@ export function HomePage() {
         <p className="overline">Tecnología gamer con respaldo real</p>
         <h1>Hardware serio para jugar mejor.</h1>
         <p>Componentes y periféricos con stock actualizado, precios oficiales y cotización directa desde la web.</p>
-        <div className="hero-actions"><Link className="button-primary" to="/catalogo">Explorar catálogo <ArrowRight size={18} /></Link><Link className="text-link" to="/cuenta">Crear cuenta</Link></div>
+        <div className="hero-actions"><Link className="btn btn-primary button-primary" to="/catalogo">Explorar catálogo <ArrowRight size={18} /></Link><Link className="btn btn-ghost text-link" to="/cuenta">Crear cuenta</Link></div>
         <ul className="hero-facts"><li>Precios en quetzales</li><li>Stock desde Odoo</li><li>Cotización inmediata</li></ul>
       </motion.div>
       <motion.div className="hero-media" initial={{ opacity: 0, scale: .985 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: .65 }}>
@@ -32,13 +32,13 @@ export function HomePage() {
     <section className="category-section page-shell">
       <header className="section-heading"><div><p className="overline">Encuentra lo que necesitas</p><h2>Compra por categoría</h2></div><Link to="/catalogo">Ver todo <ArrowRight size={15} /></Link></header>
       {productsQuery.isError ? <ErrorState message={productsQuery.error.message} retry={() => productsQuery.refetch()} /> : productsQuery.isLoading ? <div className="category-grid category-loading">{Array.from({ length: 6 }, (_, index) => <span key={index} />)}</div> : categories.length ? <div className="category-grid">{categories.map(({ category, product }) => <Link className="category-card" key={category} to={`/catalogo?categoria=${encodeURIComponent(category)}`}>
-        <span><img src={product.image_url} alt="" /></span><strong>{categoryLabel(category)}</strong><small>Explorar categoría</small>
+        <span><img src={product.image_url} alt={`Producto representativo de ${categoryLabel(category)}`} /></span><strong>{categoryLabel(category)}</strong><small>Explorar categoría</small>
       </Link>)}</div> : <EmptyState title="No hay categorías disponibles" detail="El catálogo de Odoo no devolvió productos." />}
     </section>
 
     <section className="promo-section page-shell">
-      <article className="promo-main"><div><p className="overline">Todo para tu espacio</p><h2>Arma tu setup completo.</h2><p>Combina periféricos, audio y controles dentro de una misma cotización.</p><Link className="button-primary" to="/catalogo">Ver productos</Link></div></article>
-      <article className="promo-side"><div><p className="overline">Compra personal o empresarial</p><h2>Cotiza desde la web.</h2><p>Tu solicitud queda registrada directamente en Odoo.</p><Link className="button-secondary" to="/carrito">Empezar cotización</Link></div></article>
+      <article className="card promo-main"><div><p className="overline">Todo para tu espacio</p><h2>Arma tu setup completo.</h2><p>Combina periféricos, audio y controles dentro de una misma cotización.</p><Link className="btn btn-primary button-primary" to="/catalogo">Ver productos</Link></div></article>
+      <article className="card promo-side"><div><p className="overline">Compra personal o empresarial</p><h2>Cotiza desde la web.</h2><p>Tu solicitud queda registrada directamente en Odoo.</p><Link className="btn btn-secondary button-secondary" to="/carrito">Empezar cotización</Link></div></article>
     </section>
 
     <section className="featured-section page-shell">
@@ -47,7 +47,7 @@ export function HomePage() {
     </section>
 
     <section className="trust-section page-shell">
-      <div><p className="overline">Soporte y confianza</p><h2>Compra con respaldo real.</h2><p>La información viaja desde la tienda hasta Odoo sin volver a ingresarla manualmente.</p><Link className="button-primary" to="/portal">Ir a mi portal</Link></div>
+      <div><p className="overline">Soporte y confianza</p><h2>Compra con respaldo real.</h2><p>La información viaja desde la tienda hasta Odoo sin volver a ingresarla manualmente.</p><Link className="btn btn-primary button-primary" to="/portal">Ir a mi portal</Link></div>
       <div className="trust-list"><Trust icon={<Package />} title="Stock sincronizado" detail="Disponibilidad actualizada desde Odoo." /><Trust icon={<Receipt />} title="Cotización integrada" detail="Productos, cliente y precios oficiales." /><Trust icon={<Truck />} title="Seguimiento de pedidos" detail="Consulta órdenes y facturas con tu correo." /><Trust icon={<Headset />} title="Soporte directo" detail="Un flujo claro antes y después de comprar." /></div>
     </section>
   </>;

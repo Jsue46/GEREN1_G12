@@ -84,7 +84,7 @@ class OdooClient:
         self.ensure_auth()
         # Query active saleable products
         domain = [('sale_ok', '=', True)]
-        fields = ['id', 'name', 'default_code', 'lst_price', 'qty_available', 'categ_id', 'description_sale']
+        fields = ['id', 'name', 'default_code', 'lst_price', 'qty_available', 'free_qty', 'categ_id', 'description_sale']
         products = self.models.execute_kw(
             self.db, self.uid, self.password,
             'product.product', 'search_read',
@@ -98,7 +98,8 @@ class OdooClient:
                 'name': p['name'],
                 'sku': p.get('default_code') or f"GZ-{p['id']}",
                 'price': float(p['lst_price']),
-                'stock': float(p.get('qty_available', 0)),
+                # free_qty excluye unidades ya reservadas por otros pedidos.
+                'stock': float(p.get('free_qty', p.get('qty_available', 0))),
                 'category': categ_name,
                 'description': p.get('description_sale') or "",
                 'image_url': f"/api/products/{p['id']}/image"
@@ -114,14 +115,14 @@ class OdooClient:
             self.db, self.uid, self.password,
             'product.product', 'search_read',
             [[('id', 'in', unique_ids), ('sale_ok', '=', True), ('active', '=', True)]],
-            {'fields': ['id', 'name', 'default_code', 'lst_price', 'qty_available']}
+            {'fields': ['id', 'name', 'default_code', 'lst_price', 'qty_available', 'free_qty']}
         )
         return [{
             'id': product['id'],
             'name': product['name'],
             'sku': product.get('default_code') or f"GZ-{product['id']}",
             'price': float(product['lst_price']),
-            'stock': float(product.get('qty_available', 0)),
+            'stock': float(product.get('free_qty', product.get('qty_available', 0))),
         } for product in products]
 
     def get_product_image(self, product_id):
@@ -251,6 +252,70 @@ class OdooClient:
         )[0]
         return data
 
+    def complete_delivery(self, order_id):
+        """Reserva y valida los albaranes para descontar la existencia física.
+
+        Debe llamarse únicamente después de comprobar existencias y confirmar una
+        compra. Crear una cotización nunca invoca este método.
+        """
+        self.ensure_auth()
+        order = self.models.execute_kw(
+            self.db, self.uid, self.password,
+            'sale.order', 'read',
+            [[order_id], ['picking_ids']]
+        )[0]
+        picking_ids = order.get('picking_ids', [])
+        for picking_id in picking_ids:
+            picking = self.models.execute_kw(
+                self.db, self.uid, self.password,
+                'stock.picking', 'read',
+                [[picking_id], ['state', 'move_line_ids_without_package']]
+            )[0]
+            if picking.get('state') in ('done', 'cancel'):
+                continue
+            self.models.execute_kw(
+                self.db, self.uid, self.password,
+                'stock.picking', 'action_assign',
+                [[picking_id]]
+            )
+            picking = self.models.execute_kw(
+                self.db, self.uid, self.password,
+                'stock.picking', 'read',
+                [[picking_id], ['move_line_ids_without_package']]
+            )[0]
+            move_line_ids = picking.get('move_line_ids_without_package', [])
+            move_lines = self.models.execute_kw(
+                self.db, self.uid, self.password,
+                'stock.move.line', 'read',
+                [move_line_ids, ['product_uom_qty', 'qty_done']]
+            ) if move_line_ids else []
+            for line in move_lines:
+                self.models.execute_kw(
+                    self.db, self.uid, self.password,
+                    'stock.move.line', 'write',
+                    [[line['id']], {'qty_done': line.get('product_uom_qty', 0)}]
+                )
+            result = self.models.execute_kw(
+                self.db, self.uid, self.password,
+                'stock.picking', 'button_validate',
+                [[picking_id]],
+                {'context': {'skip_sms': True}}
+            )
+            # Odoo puede devolver el wizard de transferencia inmediata si no se
+            # generaron líneas reservadas. Con stock suficiente no debería ocurrir.
+            if isinstance(result, dict) and result.get('res_model') == 'stock.immediate.transfer':
+                wizard_id = self.models.execute_kw(
+                    self.db, self.uid, self.password,
+                    'stock.immediate.transfer', 'create',
+                    [{'pick_ids': [(6, 0, [picking_id])], 'show_transfers': False}]
+                )
+                self.models.execute_kw(
+                    self.db, self.uid, self.password,
+                    'stock.immediate.transfer', 'process',
+                    [[wizard_id]]
+                )
+        return picking_ids
+
     def get_sale_order(self, order_id):
         self.ensure_auth()
         records = self.models.execute_kw(
@@ -261,6 +326,30 @@ class OdooClient:
         if not records:
             raise ValueError("La cotización indicada no existe")
         return records[0]
+
+    def get_sale_order_items(self, order_id):
+        """Obtiene cantidades oficiales de una cotización para revalidar stock."""
+        self.ensure_auth()
+        order = self.models.execute_kw(
+            self.db, self.uid, self.password,
+            'sale.order', 'read',
+            [[order_id], ['order_line']]
+        )
+        if not order:
+            raise ValueError("La cotización indicada no existe")
+        line_ids = order[0].get('order_line', [])
+        if not line_ids:
+            return []
+        lines = self.models.execute_kw(
+            self.db, self.uid, self.password,
+            'sale.order.line', 'read',
+            [line_ids, ['product_id', 'product_uom_qty', 'display_type']]
+        )
+        return [{
+            'product_id': line['product_id'][0],
+            'name': line['product_id'][1],
+            'quantity': float(line['product_uom_qty'])
+        } for line in lines if line.get('product_id') and not line.get('display_type')]
 
     def mark_lead_won(self, lead_id):
         """Actualiza la probabilidad cuando la cotización se convierte en orden."""

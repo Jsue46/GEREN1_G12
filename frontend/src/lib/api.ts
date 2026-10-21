@@ -1,4 +1,4 @@
-import type { Customer, InvoiceSummary, OrderDetail, OrderSummary, Product, QuoteResult } from "../types";
+import type { Customer, InvoiceSummary, OrderDetail, OrderSummary, PaymentMethod, Product, QuoteResult, SimulatedPayment } from "../types";
 
 export class ApiError extends Error {
   constructor(message: string, public status: number) {
@@ -41,14 +41,27 @@ export const api = {
   registerCustomer: (customer: Customer) => request<{ success: true; customer: Customer & { id: number } }>("/api/customers", {
     method: "POST", body: JSON.stringify(customer)
   }),
+  addPaymentMethod: (card: { email: string; holder_name: string; card_number: string; expiry_month: number; expiry_year: number; cvv: string }) =>
+    request<{ success: true; payment_method: PaymentMethod }>("/api/payment-methods", {
+      method: "POST", body: JSON.stringify(card)
+    }),
+  paymentMethods: async (email: string) => {
+    const data = await request<{ success: true; payment_methods: PaymentMethod[] }>(`/api/payment-methods?email=${encodeURIComponent(email)}`);
+    return data.payment_methods;
+  },
   createQuote: (customer: Customer, items: Array<{ product_id: number; quantity: number }>) =>
     request<{ success: true; data: QuoteResult }>("/api/quotes", {
       method: "POST", body: JSON.stringify({ customer, items })
     }),
-  convertQuote: (quoteId: number, email: string) => request<{ success: true; data: {
+  convertQuote: (quoteId: number, email: string, paymentMethodId: string) => request<{ success: true; data: {
     sale_order_id: number; order_number: string; order_state: string; total: number;
-    invoice: { id: number; name: string } | null; invoice_warning: string | null; customer_email: string;
-  } }>(`/api/quotes/${quoteId}/convert`, { method: "POST", body: JSON.stringify({ email }) }),
+    invoice: { id: number; name: string } | null; invoice_warning: string | null; customer_email: string; payment: SimulatedPayment;
+  } }>(`/api/quotes/${quoteId}/convert`, { method: "POST", body: JSON.stringify({ email, payment_method_id: paymentMethodId }) }),
+  checkout: (customer: Customer, items: Array<{ product_id: number; quantity: number }>, paymentMethodId: string) =>
+    request<{ success: true; data: {
+      sale_order_id: number; order_number: string; order_state: string; total: number; customer_email?: string;
+      invoice: { id: number; name: string } | null; invoice_warning: string | null; payment: SimulatedPayment;
+    } }>("/api/checkout", { method: "POST", body: JSON.stringify({ customer, items, payment_method_id: paymentMethodId }) }),
   orders: async (email: string) => {
     const data = await request<{ success: true; orders: OrderSummary[] }>(`/api/portal/orders?email=${encodeURIComponent(email)}`);
     return data.orders;
@@ -56,6 +69,10 @@ export const api = {
   invoices: async (email: string) => {
     const data = await request<{ success: true; invoices: InvoiceSummary[] }>(`/api/portal/invoices?email=${encodeURIComponent(email)}`);
     return data.invoices;
+  },
+  payments: async (email: string) => {
+    const data = await request<{ success: true; payments: SimulatedPayment[] }>(`/api/portal/payments?email=${encodeURIComponent(email)}`);
+    return data.payments;
   },
   orderDetail: async (orderId: number, email: string) => {
     const data = await request<{ success: true; order: OrderDetail }>(`/api/portal/orders/${orderId}?email=${encodeURIComponent(email)}`);

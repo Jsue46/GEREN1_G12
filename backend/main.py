@@ -4,6 +4,7 @@ from fastapi.responses import FileResponse, RedirectResponse
 from pydantic import BaseModel, EmailStr, Field
 from typing import List, Optional
 from pathlib import Path
+from threading import Lock
 import base64
 import hashlib
 import logging
@@ -11,6 +12,7 @@ import os
 import uvicorn
 
 from odoo_client import OdooClient
+from payment_service import PaymentService, PaymentValidationError
 from config import SERVER_PORT, FRONTEND_ORIGINS
 
 logger = logging.getLogger(__name__)
@@ -31,6 +33,10 @@ app.add_middleware(
 )
 
 odoo = OdooClient()
+payments = PaymentService(os.getenv("PAYMENTS_DB_PATH"))
+# Evita que dos compras atendidas por este proceso validen simultáneamente la
+# misma existencia antes de que Odoo complete el primer despacho.
+purchase_lock = Lock()
 
 # Pydantic Schemas
 class CustomerData(BaseModel):
@@ -52,6 +58,18 @@ class CheckoutRequest(BaseModel):
 
 class QuoteConversionRequest(BaseModel):
     email: EmailStr
+    payment_method_id: str = Field(min_length=8)
+
+class PurchaseRequest(CheckoutRequest):
+    payment_method_id: str = Field(min_length=8)
+
+class PaymentMethodRequest(BaseModel):
+    email: EmailStr
+    holder_name: str = Field(min_length=3, max_length=100)
+    card_number: str = Field(min_length=13, max_length=25)
+    expiry_month: int = Field(ge=1, le=12)
+    expiry_year: int = Field(ge=2020, le=2200)
+    cvv: str = Field(min_length=3, max_length=4)
 
 @app.get("/")
 def health_check():
@@ -63,11 +81,13 @@ def health_check():
         "endpoints": {
             "products": "/api/products",
             "checkout": "/api/checkout",
+            "payment_methods": "/api/payment-methods",
             "customers": "/api/customers",
             "quotes": "/api/quotes",
             "convert_quote": "/api/quotes/{quote_id}/convert",
             "portal_orders": "/api/portal/orders?email={email}",
             "portal_invoices": "/api/portal/invoices?email={email}",
+            "portal_payments": "/api/portal/payments?email={email}",
             "docs": "/docs"
         }
     }
@@ -134,7 +154,28 @@ def register_customer(customer: CustomerData):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error registrando el cliente en Odoo: {str(e)}")
 
-def _prepare_commercial_request(payload: CheckoutRequest):
+def _assert_stock(items, products_by_id):
+    shortages = []
+    for item in items:
+        product = products_by_id.get(item["product_id"])
+        available = max(0, float(product.get("stock", 0))) if product else 0
+        requested = float(item["quantity"])
+        if requested > available:
+            shortages.append({
+                "product_id": item["product_id"],
+                "name": product.get("name", item.get("name", "Producto")) if product else item.get("name", "Producto"),
+                "requested": requested,
+                "available": available,
+            })
+    if shortages:
+        detail = "; ".join(
+            f"{item['name']}: solicitadas {item['requested']:g}, disponibles {item['available']:g}"
+            for item in shortages
+        )
+        raise HTTPException(status_code=409, detail=f"Stock insuficiente. {detail}")
+
+
+def _prepare_commercial_request(payload: CheckoutRequest, require_stock=True):
     if not payload.items:
         raise HTTPException(status_code=400, detail="El carrito de compras está vacío")
     quantities = {}
@@ -153,11 +194,50 @@ def _prepare_commercial_request(payload: CheckoutRequest):
         "price_unit": by_id[product_id]["price"],
         "quantity": quantity
     } for product_id, quantity in quantities.items()]
+    if require_stock:
+        _assert_stock(items, by_id)
     total = sum(item["price_unit"] * item["quantity"] for item in items)
     summary = "\n".join(
         f"- {item['name']} x{item['quantity']} (Q{item['price_unit']})" for item in items
     )
     return items, total, summary
+
+
+def _get_payment_method_or_400(email, payment_method_id):
+    method = payments.get_method(payment_method_id, str(email))
+    if not method:
+        raise HTTPException(status_code=400, detail="La tarjeta seleccionada no pertenece a este cliente")
+    try:
+        payments._validate_expiry(method["expiry_month"], method["expiry_year"])
+    except PaymentValidationError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    return method
+
+
+@app.post("/api/payment-methods", status_code=201)
+def add_payment_method(payload: PaymentMethodRequest):
+    """Tokeniza una tarjeta simulada. PAN y CVV nunca se guardan."""
+    try:
+        method = payments.add_method(
+            email=str(payload.email), holder_name=payload.holder_name,
+            card_number=payload.card_number, expiry_month=payload.expiry_month,
+            expiry_year=payload.expiry_year, cvv=payload.cvv,
+        )
+        return {"success": True, "message": "Tarjeta agregada.", "payment_method": method}
+    except PaymentValidationError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+
+
+@app.get("/api/payment-methods")
+def list_payment_methods(email: EmailStr = Query(...)):
+    methods = payments.list_methods(str(email))
+    return {"success": True, "count": len(methods), "payment_methods": methods}
+
+
+@app.get("/api/portal/payments")
+def list_simulated_payments(email: EmailStr = Query(...)):
+    records = payments.list_payments(str(email))
+    return {"success": True, "count": len(records), "payments": records}
 
 @app.post("/api/quotes", status_code=201)
 def create_quote(payload: CheckoutRequest):
@@ -197,31 +277,39 @@ def create_quote(payload: CheckoutRequest):
 def convert_quote(quote_id: int, payload: QuoteConversionRequest):
     """Confirma una cotización propia y genera reserva de inventario y factura."""
     try:
-        quote = odoo.get_sale_order(quote_id)
-        if quote.get("state") not in ("draft", "sent"):
-            raise HTTPException(status_code=409, detail="La cotización ya fue convertida o no está disponible")
-        partner = quote.get("partner_id")
-        partner_id = partner[0] if isinstance(partner, list) else partner
-        if not odoo.quote_belongs_to_email(partner_id, str(payload.email)):
-            raise HTTPException(status_code=403, detail="El correo no corresponde a esta cotización")
-        order_info = odoo.confirm_sale_order(quote_id)
-        opportunity = quote.get("opportunity_id")
-        lead_id = opportunity[0] if isinstance(opportunity, list) else opportunity
-        try:
-            odoo.mark_lead_won(lead_id)
-        except Exception as e:
-            # La orden ya fue confirmada: un fallo secundario del CRM no debe
-            # provocar que el navegador intente confirmar la misma orden otra vez.
-            logger.warning("No se pudo actualizar la oportunidad %s: %s", lead_id, e)
-        invoice = None
-        invoice_warning = None
-        try:
-            invoice = odoo.create_and_post_invoice(quote_id)
-        except Exception as e:
-            # Facturar es un paso posterior. Se evita devolver un error falso
-            # después de que Odoo ya confirmó la orden de manera irreversible.
-            invoice_warning = f"La orden fue confirmada, pero la factura quedó pendiente: {str(e)}"
-            logger.warning("No se pudo facturar la orden %s: %s", quote_id, e)
+        with purchase_lock:
+            quote = odoo.get_sale_order(quote_id)
+            if quote.get("state") not in ("draft", "sent"):
+                raise HTTPException(status_code=409, detail="La cotización ya fue convertida o no está disponible")
+            partner = quote.get("partner_id")
+            partner_id = partner[0] if isinstance(partner, list) else partner
+            if not odoo.quote_belongs_to_email(partner_id, str(payload.email)):
+                raise HTTPException(status_code=403, detail="El correo no corresponde a esta cotización")
+            _get_payment_method_or_400(payload.email, payload.payment_method_id)
+            quote_items = odoo.get_sale_order_items(quote_id)
+            official_products = odoo.get_products_by_ids(item["product_id"] for item in quote_items)
+            _assert_stock(quote_items, {product["id"]: product for product in official_products})
+            order_info = odoo.confirm_sale_order(quote_id)
+            odoo.complete_delivery(quote_id)
+            opportunity = quote.get("opportunity_id")
+            lead_id = opportunity[0] if isinstance(opportunity, list) else opportunity
+            try:
+                odoo.mark_lead_won(lead_id)
+            except Exception as e:
+                logger.warning("No se pudo actualizar la oportunidad %s: %s", lead_id, e)
+            invoice = None
+            invoice_warning = None
+            try:
+                invoice = odoo.create_and_post_invoice(quote_id)
+            except Exception as e:
+                invoice_warning = f"La compra fue confirmada, pero la factura quedó pendiente: {str(e)}"
+                logger.warning("No se pudo facturar la orden %s: %s", quote_id, e)
+            payment = payments.charge(
+                email=str(payload.email), payment_method_id=payload.payment_method_id,
+                amount=float(quote.get("amount_total", 0)), sale_order_id=quote_id,
+                order_number=order_info.get("name"),
+                invoice_id=invoice.get("id") if invoice else None,
+            )
         return {
             "success": True,
             "message": "Cotización convertida en orden de venta.",
@@ -232,6 +320,7 @@ def convert_quote(quote_id: int, payload: QuoteConversionRequest):
                 "picking_ids": order_info.get("picking_ids", []),
                 "invoice": invoice,
                 "invoice_warning": invoice_warning,
+                "payment": payment,
                 "total": float(quote.get("amount_total", 0)),
                 "crm_lead_id": lead_id,
                 "customer_email": str(payload.email)
@@ -243,7 +332,7 @@ def convert_quote(quote_id: int, payload: QuoteConversionRequest):
         raise HTTPException(status_code=500, detail=f"Error convirtiendo la cotización: {str(e)}")
 
 @app.post("/api/checkout")
-def process_checkout(payload: CheckoutRequest):
+def process_checkout(payload: PurchaseRequest):
     """
     Flujo de integración extremo a extremo automático:
     1. Registra o recupera el Cliente en Odoo (res.partner).
@@ -254,37 +343,33 @@ def process_checkout(payload: CheckoutRequest):
     """
     try:
         cust = payload.customer
-        items, total_amount, items_summary = _prepare_commercial_request(payload)
-
-        # 1. Partner in Odoo
-        partner_id = odoo.get_or_create_customer(
-            name=cust.name,
-            email=str(cust.email),
-            phone=cust.phone,
-            address=cust.address,
-            city=cust.city
-        )
-
-        # 2. CRM Opportunity
-        lead_id = odoo.create_crm_lead(
-            partner_id=partner_id,
-            customer_name=cust.name,
-            total_amount=total_amount,
-            items_desc=items_summary
-        )
-
-        # 3. Create Sale Order
-        order_id = odoo.create_sale_order(
-            partner_id=partner_id,
-            items=items,
-            lead_id=lead_id
-        )
-
-        # 4. Confirm Sale Order (triggers inventory delivery)
-        order_info = odoo.confirm_sale_order(order_id)
-
-        # 5. Create & Post Invoice
-        inv_data = odoo.create_and_post_invoice(order_id)
+        _get_payment_method_or_400(cust.email, payload.payment_method_id)
+        with purchase_lock:
+            items, total_amount, items_summary = _prepare_commercial_request(payload)
+            partner_id = odoo.get_or_create_customer(
+                name=cust.name, email=str(cust.email), phone=cust.phone,
+                address=cust.address, city=cust.city
+            )
+            lead_id = odoo.create_crm_lead(
+                partner_id=partner_id, customer_name=cust.name,
+                total_amount=total_amount, items_desc=items_summary
+            )
+            order_id = odoo.create_sale_order(partner_id=partner_id, items=items, lead_id=lead_id)
+            order_info = odoo.confirm_sale_order(order_id)
+            odoo.complete_delivery(order_id)
+            inv_data = None
+            invoice_warning = None
+            try:
+                inv_data = odoo.create_and_post_invoice(order_id)
+            except Exception as error:
+                invoice_warning = f"La compra fue confirmada, pero la factura quedó pendiente: {error}"
+                logger.warning("No se pudo facturar la orden %s: %s", order_id, error)
+            payment = payments.charge(
+                email=str(cust.email), payment_method_id=payload.payment_method_id,
+                amount=total_amount, sale_order_id=order_id,
+                order_number=order_info.get('name'),
+                invoice_id=inv_data.get('id') if inv_data else None,
+            )
 
         return {
             "success": True,
@@ -297,6 +382,8 @@ def process_checkout(payload: CheckoutRequest):
                 "order_state": order_info.get('state'),
                 "picking_ids": order_info.get('picking_ids', []),
                 "invoice": inv_data,
+                "invoice_warning": invoice_warning,
+                "payment": payment,
                 "total": total_amount
             }
         }
@@ -319,6 +406,12 @@ def get_customer_invoices(email: str = Query(..., description="Correo del client
     """Portal de Cliente: Consulta las facturas asociadas a un correo."""
     try:
         invoices = odoo.get_customer_invoices(email=email.strip())
+        simulated = payments.list_payments(email.strip())
+        paid_invoice_ids = {record["invoice_id"] for record in simulated if record.get("invoice_id")}
+        for invoice in invoices:
+            invoice["simulated_payment"] = invoice["id"] in paid_invoice_ids
+            if invoice["simulated_payment"]:
+                invoice["payment_display"] = "Pagada (simulación educativa)"
         return {"success": True, "email": email, "count": len(invoices), "invoices": invoices}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error consultando facturas del cliente: {str(e)}")

@@ -10,15 +10,17 @@ Este repositorio contiene el sitio E-Commerce y la capa de integración con Odoo
 
 1. **Catálogo y carrito (Integrante 1):** catálogo sincronizado de más de 30 productos, búsqueda, filtros, cantidades, eliminación, total y persistencia local.
 2. **Registro y cotizaciones (Integrante 1):** alta de clientes, cotizaciones en borrador y conversión explícita a orden de venta.
-3. **Manual de usuario (Integrante 1):** recorrido ilustrado con capturas de las pantallas principales.
-4. **Middleware API REST (FastAPI):** Servicio backend que recibe las solicitudes del sitio y las procesa en Odoo.
-5. **Sincronización Bidireccional en Tiempo Real:**
+3. **Pago educativo:** tarjetas tokenizadas (sin guardar PAN ni CVV), pagos simulados sin límite de saldo y recibos consultables.
+4. **Manual de usuario (Integrante 1):** recorrido ilustrado con capturas de las pantallas principales.
+5. **Middleware API REST (FastAPI):** Servicio backend que recibe las solicitudes del sitio y las procesa en Odoo.
+6. **Sincronización Bidireccional en Tiempo Real:**
    * **CRM (`crm.lead`):** Registra cada intento y venta como oportunidad ganada con su monto esperado.
    * **ERP Ventas (`sale.order`):** Genera la orden de venta confirmada.
    * **Inventario (`stock.picking`):** Descuenta el stock y genera la orden de despacho en almacén automáticamente.
-6. **Facturación Funcional:** Al convertir la cotización, Odoo confirma la venta, reserva inventario y publica la factura de cliente (`account.move`).
-7. **Portal de Cliente:** Vista para consultar cotizaciones, pedidos y facturas por correo.
-8. **Pruebas:** Contrato API aislado en `tests/test_api.py` y prueba integral en `tests/test_flow.py`.
+7. **Inventario protegido:** cada compra revalida existencias y completa el despacho; una cotización no reserva ni descuenta stock.
+8. **Facturación Funcional:** Al comprar, Odoo confirma la venta y publica la factura de cliente (`account.move`).
+9. **Portal de Cliente:** Vista para consultar cotizaciones, pedidos, facturas y pagos simulados por correo.
+10. **Pruebas:** Contrato API aislado en `tests/test_api.py`, pruebas del servicio educativo de pagos y prueba integral en `tests/test_flow.py`.
 
 ---
 
@@ -93,7 +95,10 @@ cd SEMI1_G12
 python -m venv .venv
 source .venv/bin/activate
 pip install -r backend/requirements.txt
+cp .env.example .env
 ```
+
+Edite `.env` y coloque las credenciales del usuario de integración de Odoo. Nunca guarde credenciales reales en Git.
 
 ### 3. Compilar el frontend
 ```bash

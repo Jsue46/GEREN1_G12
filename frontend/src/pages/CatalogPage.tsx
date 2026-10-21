@@ -1,4 +1,4 @@
-import { FunnelSimple, MagnifyingGlass } from "@phosphor-icons/react";
+import { FunnelSimple, MagnifyingGlass, X } from "@phosphor-icons/react";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -13,23 +13,24 @@ export function CatalogPage() {
   const search = params.get("q") ?? "";
   const category = params.get("categoria") ?? "Todos";
   const order = params.get("orden") ?? "featured";
+  const onlyAvailable = params.get("stock") === "available";
   const products = productsQuery.data ?? [];
   const categories = useMemo(() => ["Todos", ...new Set(products.map((product) => product.category))], [products]);
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("es");
-    const result = products.filter((product) => (category === "Todos" || product.category === category) && `${product.name} ${product.sku} ${product.category}`.toLocaleLowerCase("es").includes(term));
+    const result = products.filter((product) => (category === "Todos" || product.category === category) && (!onlyAvailable || product.stock > 0) && `${product.name} ${product.sku} ${product.category}`.toLocaleLowerCase("es").includes(term));
     return [...result].sort((a, b) => order === "price-asc" ? a.price - b.price : order === "price-desc" ? b.price - a.price : order === "name" ? a.name.localeCompare(b.name) : 0);
-  }, [products, search, category, order]);
+  }, [products, search, category, order, onlyAvailable]);
   const update = (key: string, value: string) => { const next = new URLSearchParams(params); value && value !== "Todos" && value !== "featured" ? next.set(key, value) : next.delete(key); setParams(next); setLimit(12); };
 
   return <section className="catalog-page page-shell page-top">
     <header className="page-title"><p className="overline">Catálogo GamerZone</p><h1>Encuentra tu próximo equipo.</h1><p>Precios y existencias consultados directamente desde Odoo.</p></header>
     <div className="catalog-toolbar">
-      <label className="catalog-search"><MagnifyingGlass size={19} /><input value={search} onChange={(event) => update("q", event.target.value)} placeholder="Buscar por producto o SKU" /></label>
-      <label className="select-control"><FunnelSimple size={18} /><select value={order} onChange={(event) => update("orden", event.target.value)} aria-label="Ordenar productos"><option value="featured">Recomendados</option><option value="price-asc">Precio menor</option><option value="price-desc">Precio mayor</option><option value="name">Nombre</option></select></label>
+      <label className="input input-ghost catalog-search"><MagnifyingGlass size={19} /><input value={search} onChange={(event) => update("q", event.target.value)} placeholder="Buscar por producto o SKU" aria-label="Buscar productos" /></label>
+      <label className="select-control"><FunnelSimple size={18} /><select className="select select-ghost" value={order} onChange={(event) => update("orden", event.target.value)} aria-label="Ordenar productos"><option value="featured">Recomendados</option><option value="price-asc">Precio menor</option><option value="price-desc">Precio mayor</option><option value="name">Nombre</option></select></label>
     </div>
-    <div className="category-tabs" aria-label="Categorías">{categories.map((item) => <button className={category === item ? "active" : ""} key={item} onClick={() => update("categoria", item)}>{item === "Todos" ? item : categoryLabel(item)}</button>)}</div>
-    <div className="catalog-count">{productsQuery.isLoading ? "Consultando catálogo" : `${filtered.length} productos encontrados`}</div>
-    {productsQuery.isLoading ? <ProductSkeleton count={12} /> : productsQuery.isError ? <ErrorState message={productsQuery.error.message} retry={() => productsQuery.refetch()} /> : filtered.length === 0 ? <EmptyState title="No encontramos coincidencias" detail="Prueba otra búsqueda o selecciona una categoría diferente." /> : <><div className="product-grid">{filtered.slice(0, limit).map((product) => <ProductCard key={product.id} product={product} />)}</div><div className="load-more"><span>Mostrando {Math.min(limit, filtered.length)} de {filtered.length}</span>{limit < filtered.length && <button className="button-secondary" onClick={() => setLimit((value) => value + 12)}>Ver más productos</button>}</div></>}
+    <div className="category-tabs" aria-label="Categorías">{categories.map((item) => <button className={`btn btn-ghost btn-sm ${category === item ? "btn-active active" : ""}`} key={item} onClick={() => update("categoria", item)}>{item === "Todos" ? item : categoryLabel(item)}</button>)}</div>
+    <div className="catalog-subtoolbar"><label className="stock-toggle"><input className="toggle toggle-sm" type="checkbox" checked={onlyAvailable} onChange={(event) => update("stock", event.target.checked ? "available" : "")} /><span>Solo disponibles</span></label><div className="catalog-count">{productsQuery.isLoading ? "Consultando catálogo" : `${filtered.length} productos encontrados`}</div>{params.size > 0 && <button className="btn btn-ghost btn-sm" onClick={() => { setParams({}); setLimit(12); }}><X size={15} />Limpiar filtros</button>}</div>
+    {productsQuery.isLoading ? <ProductSkeleton count={12} /> : productsQuery.isError ? <ErrorState message={productsQuery.error.message} retry={() => productsQuery.refetch()} /> : filtered.length === 0 ? <EmptyState title="No encontramos coincidencias" detail="Prueba otra búsqueda o selecciona una categoría diferente." /> : <><div className="product-grid">{filtered.slice(0, limit).map((product) => <ProductCard key={product.id} product={product} />)}</div><div className="load-more"><span>Mostrando {Math.min(limit, filtered.length)} de {filtered.length}</span>{limit < filtered.length && <button className="btn btn-secondary button-secondary" onClick={() => setLimit((value) => value + 12)}>Ver más productos</button>}</div></>}
   </section>;
 }

@@ -17,6 +17,30 @@ export interface Customer {
   city: string;
 }
 
+export interface PaymentMethod {
+  id: string;
+  email: string;
+  holder_name: string;
+  brand: string;
+  last4: string;
+  expiry_month: number;
+  expiry_year: number;
+  created_at: string;
+}
+
+export interface SimulatedPayment {
+  id: string;
+  receipt: string;
+  amount: number;
+  currency: string;
+  status: "approved";
+  sale_order_id: number;
+  order_number: string;
+  invoice_id: number | null;
+  created_at: string;
+  card: { brand: string; last4: string };
+}
+
 export interface CartLine {
   product: Product;
   quantity: number;
@@ -51,6 +75,7 @@ export interface InvoiceSummary {
   state_display: string;
   payment_state: string;
   payment_display: string;
+  simulated_payment?: boolean;
 }
 
 export interface OrderDetail extends OrderSummary {

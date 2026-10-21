@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { CartDrawer } from "./CartDrawer";
 import { Footer } from "./Footer";
 import { Header } from "./Header";
+import { MobileDock } from "./MobileDock";
 import { Notification } from "./Notification";
 
 export function Layout() {
@@ -15,5 +16,6 @@ export function Layout() {
     <Footer />
     <CartDrawer />
     <Notification />
+    <MobileDock />
   </>;
 }

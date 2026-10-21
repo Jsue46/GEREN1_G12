@@ -34,10 +34,23 @@ class EcommerceApiTests(unittest.TestCase):
         self.fake_odoo = MagicMock()
         self.patcher = patch.object(main, "odoo", self.fake_odoo)
         self.patcher.start()
+        self.fake_payments = MagicMock()
+        self.payment_patcher = patch.object(main, "payments", self.fake_payments)
+        self.payment_patcher.start()
+        self.fake_payments.get_method.return_value = {
+            "id": "pm_sim_test", "email": CUSTOMER["email"], "brand": "Visa",
+            "last4": "4242", "expiry_month": 12, "expiry_year": 2099,
+        }
+        self.fake_payments.charge.return_value = {
+            "id": "pay_sim_test", "receipt": "SIM-TEST", "status": "approved",
+            "amount": 1498.0, "currency": "GTQ", "order_number": "S00120",
+            "card": {"brand": "Visa", "last4": "4242"}, "created_at": "2099-01-01T00:00:00Z",
+        }
         self.client = TestClient(main.app)
 
     def tearDown(self):
         self.patcher.stop()
+        self.payment_patcher.stop()
 
     def test_catalog_returns_more_than_30_products(self):
         self.fake_odoo.get_products.return_value = [
@@ -98,12 +111,14 @@ class EcommerceApiTests(unittest.TestCase):
             "opportunity_id": [44, "Cotización Web"],
         }
         self.fake_odoo.quote_belongs_to_email.return_value = True
+        self.fake_odoo.get_sale_order_items.return_value = [{"product_id": 17, "name": "Teclado Mecánico TKL", "quantity": 2}]
+        self.fake_odoo.get_products_by_ids.return_value = [{"id": 17, "name": "Teclado Mecánico TKL", "price": 749.0, "stock": 8}]
         self.fake_odoo.confirm_sale_order.return_value = {
             "name": "S00120", "state": "sale", "picking_ids": [77]
         }
         self.fake_odoo.create_and_post_invoice.return_value = {"id": 31, "name": "INV/2026/0031"}
         response = self.client.post(
-            "/api/quotes/120/convert", json={"email": CUSTOMER["email"]}
+            "/api/quotes/120/convert", json={"email": CUSTOMER["email"], "payment_method_id": "pm_sim_test"}
         )
         self.assertEqual(response.status_code, 200)
         body = response.json()["data"]
@@ -117,16 +132,58 @@ class EcommerceApiTests(unittest.TestCase):
             "partner_id": [91, "María Fernanda López"], "opportunity_id": False,
         }
         self.fake_odoo.quote_belongs_to_email.return_value = True
+        self.fake_odoo.get_sale_order_items.return_value = [{"product_id": 17, "name": "Teclado Mecánico TKL", "quantity": 2}]
+        self.fake_odoo.get_products_by_ids.return_value = [{"id": 17, "name": "Teclado Mecánico TKL", "price": 749.0, "stock": 8}]
         self.fake_odoo.confirm_sale_order.return_value = {
             "name": "S00120", "state": "sale", "picking_ids": [77]
         }
         self.fake_odoo.create_and_post_invoice.side_effect = RuntimeError("Diario contable no configurado")
-        response = self.client.post("/api/quotes/120/convert", json={"email": CUSTOMER["email"]})
+        response = self.client.post("/api/quotes/120/convert", json={"email": CUSTOMER["email"], "payment_method_id": "pm_sim_test"})
         self.assertEqual(response.status_code, 200)
         body = response.json()["data"]
         self.assertEqual(body["order_state"], "sale")
         self.assertIsNone(body["invoice"])
         self.assertIn("factura quedó pendiente", body["invoice_warning"])
+
+    def test_quote_rejects_quantity_above_stock(self):
+        self.fake_odoo.get_products_by_ids.return_value = [{
+            "id": 17, "name": "Teclado Mecánico TKL", "price": 749.0, "stock": 4
+        }]
+        item = {**ITEM, "quantity": 15}
+        response = self.client.post("/api/quotes", json={"customer": CUSTOMER, "items": [item]})
+        self.assertEqual(response.status_code, 409)
+        self.assertIn("solicitadas 15", response.json()["detail"])
+        self.assertIn("disponibles 4", response.json()["detail"])
+        self.fake_odoo.create_sale_order.assert_not_called()
+
+    def test_quote_does_not_confirm_or_complete_delivery(self):
+        self.fake_odoo.get_products_by_ids.return_value = [{
+            "id": 17, "name": "Teclado Mecánico TKL", "price": 749.0, "stock": 8
+        }]
+        self.fake_odoo.get_or_create_customer.return_value = 91
+        self.fake_odoo.create_quote_lead.return_value = 44
+        self.fake_odoo.create_sale_order.return_value = 120
+        self.fake_odoo.get_sale_order.return_value = {"id": 120, "name": "S00120", "state": "draft", "amount_total": 1498.0}
+        response = self.client.post("/api/quotes", json={"customer": CUSTOMER, "items": [ITEM]})
+        self.assertEqual(response.status_code, 201)
+        self.fake_odoo.confirm_sale_order.assert_not_called()
+        self.fake_odoo.complete_delivery.assert_not_called()
+
+    def test_purchase_revalidates_stock_and_completes_delivery(self):
+        self.fake_odoo.get_products_by_ids.return_value = [{
+            "id": 17, "name": "Teclado Mecánico TKL", "price": 749.0, "stock": 8
+        }]
+        self.fake_odoo.get_or_create_customer.return_value = 91
+        self.fake_odoo.create_crm_lead.return_value = 44
+        self.fake_odoo.create_sale_order.return_value = 120
+        self.fake_odoo.confirm_sale_order.return_value = {"name": "S00120", "state": "sale", "picking_ids": [77]}
+        self.fake_odoo.create_and_post_invoice.return_value = {"id": 31, "name": "INV/2026/0031"}
+        response = self.client.post("/api/checkout", json={
+            "customer": CUSTOMER, "items": [ITEM], "payment_method_id": "pm_sim_test"
+        })
+        self.assertEqual(response.status_code, 200)
+        self.fake_odoo.complete_delivery.assert_called_once_with(120)
+        self.fake_payments.charge.assert_called_once()
 
     def test_empty_quote_is_rejected(self):
         response = self.client.post("/api/quotes", json={"customer": CUSTOMER, "items": []})

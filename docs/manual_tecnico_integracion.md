@@ -72,7 +72,7 @@ El servidor middleware corre en el puerto `8000` y expone documentación interac
 ---
 
 ### 3.2. `POST /api/checkout`
-* **Descripción:** Procesa la compra del carrito, registra el cliente, crea el lead en CRM, genera y confirma la orden de venta (descontando stock) y emite la factura contable automáticamente.
+* **Descripción:** Procesa la compra del carrito con una Tarjeta previamente adjuntada, valida stock, registra el cliente y el pago simulado, crea el lead en CRM, genera y confirma la orden, valida el despacho y emite la factura contable automáticamente.
 * **Cuerpo de la Petición (Request JSON):**
 ```json
 {
@@ -90,7 +90,8 @@ El servidor middleware corre en el puerto `8000` y expone documentación interac
       "price_unit": 699.0,
       "quantity": 1
     }
-  ]
+  ],
+  "payment_method_id": "pm_sim_1234567890abcdef"
 }
 ```
 * **Respuesta Exitosa (HTTP 200):**
@@ -112,6 +113,13 @@ El servidor middleware corre en el puerto `8000` y expone documentación interac
       "amount_total": 699.0,
       "payment_state": "not_paid",
       "invoice_date": "2026-10-19"
+    },
+    "payment": {
+      "receipt": "SIM-20261021-A1B2C3D4",
+      "status": "approved",
+      "amount": 699.0,
+      "currency": "GTQ",
+      "card": {"brand": "Visa", "last4": "4242"}
     },
     "total": 699.0
   }
@@ -168,6 +176,24 @@ El servidor middleware corre en el puerto `8000` y expone documentación interac
   ]
 }
 ```
+
+### 3.5. Servicio educativo de tarjetas y pagos
+
+- `POST /api/payment-methods`: valida el número mediante Luhn y adjunta al correo un token de tarjeta simulada. El PAN completo y el CVV nunca se almacenan.
+- `GET /api/payment-methods?email=...`: devuelve únicamente titular, marca, últimos cuatro dígitos y vencimiento.
+- `GET /api/portal/payments?email=...`: devuelve recibos `SIM-...` asociados a compras educativas.
+- `POST /api/checkout`: requiere `payment_method_id`, valida que pertenezca al cliente y registra el pago simulado aprobado sin límite de saldo.
+- `POST /api/quotes/{id}/convert`: requiere la misma referencia de pago para convertir una cotización en compra.
+
+Los metadatos tokenizados y recibos se guardan en SQLite bajo `backend/data/payments.db`, ruta excluida de Git y configurable mediante `PAYMENTS_DB_PATH`. Este módulo no procesa dinero real y debe presentarse explícitamente como simulación académica.
+
+Cuando una factura está vinculada a uno de estos recibos, el portal muestra **Pagada (simulación educativa)**. El asiento de Odoo puede conservar `payment_state = not_paid`, ya que no se registra un movimiento bancario real ni una conciliación contable ficticia.
+
+### 3.6. Regla de inventario
+
+El backend reconstruye las líneas con datos de Odoo y compara la cantidad solicitada contra `free_qty`, evitando vender unidades físicas que ya fueron reservadas por otros pedidos. Una insuficiencia devuelve HTTP `409` antes de crear o confirmar una orden. Al convertir una cotización se repite la consulta, porque la existencia puede haber cambiado desde su creación.
+
+Crear una cotización solamente genera `sale.order` en estado `draft`; no confirma, reserva ni descuenta inventario. Una compra aprobada ejecuta `action_confirm`, reserva el albarán y valida `stock.picking` con `skip_sms`, momento en el que Odoo descuenta la existencia física. El contexto evita que el asistente de confirmación SMS de Odoo 14 interrumpa silenciosamente el despacho automático. Un bloqueo en el proceso FastAPI evita que dos solicitudes locales comprueben simultáneamente el mismo stock.
 
 ---
 

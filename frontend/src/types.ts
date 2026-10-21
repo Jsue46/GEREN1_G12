@@ -46,6 +46,14 @@ export interface CartLine {
   quantity: number;
 }
 
+export interface PurchaseLine {
+  id: number;
+  name: string;
+  image_url?: string;
+  quantity: number;
+  price: number;
+}
+
 export interface QuoteResult {
   quote_id: number;
   quote_number: string;

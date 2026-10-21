@@ -70,6 +70,7 @@ const order = {
     { id: 1, name: "HyperX Cloud II", product_id: 67, quantity: 2, price_unit: 699, subtotal: 1398 }
   ]
 };
+let converted = false;
 
 await page.route("**/api/customers", async (route) => {
   if (route.request().method() !== "POST") return route.continue();
@@ -83,13 +84,15 @@ await page.route("**/api/payment-methods?*", async (route) => {
   await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, payment_methods: [paymentMethod] }) });
 });
 await page.route("**/api/quotes/120/convert", async (route) => {
+  converted = true;
   await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
     success: true,
     data: { sale_order_id: 120, order_number: "S00120", order_state: "sale", total: 1398, invoice: { id: 31, name: "INV/2026/0031" }, invoice_warning: null, customer_email: customer.email, payment }
   }) });
 });
 await page.route("**/api/portal/orders/120?*", async (route) => {
-  await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, order }) });
+  const currentOrder = converted ? order : { ...order, state: "draft", state_display: "Cotización", has_delivery: false };
+  await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, order: currentOrder }) });
 });
 await page.route("**/api/portal/orders?*", async (route) => {
   await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ success: true, orders: [
@@ -153,7 +156,9 @@ await page.getByRole("button", { name: /Solo cotizar/ }).click();
 await page.getByText("S00120").waitFor();
 await capture("05_cotizacion_creada.png", false);
 
-await page.getByRole("button", { name: "Pagar y convertir en orden" }).click();
+await page.getByRole("link", { name: /Ver y pagar cotización/ }).click();
+await page.getByRole("heading", { name: "Paga este documento." }).waitFor();
+await page.getByRole("button", { name: "Pagar S00120" }).click();
 await page.getByRole("heading", { name: "Revisa antes de pagar" }).waitFor();
 await capture("05_confirmar_compra.png", false);
 await page.getByRole("button", { name: "Confirmar y pagar" }).click();

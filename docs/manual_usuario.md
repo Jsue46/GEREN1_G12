@@ -194,22 +194,23 @@ Después de guardar, se muestra el número asignado por Odoo, su estado y total 
 
 En esta pantalla puede:
 
-- seleccionar **Ver detalle** para consultar las líneas guardadas;
+- seleccionar **Ver y pagar cotización** para consultar las líneas oficiales;
 - dejar la cotización en borrador y consultarla después en **Mis pedidos**;
-- seleccionar una tarjeta y **Pagar y convertir en orden** para confirmar la compra.
+- seleccionar **Ver en Mis pedidos** para recuperarla posteriormente con su código.
 
 ## 11. Comprar o convertir la cotización en orden
 
-1. Seleccione una Tarjeta y presione **Comprar y pagar** o **Pagar y convertir en orden**.
-2. Revise productos, unidades, total y tarjeta en la confirmación final.
-3. Presione **Confirmar y pagar**. Puede utilizar **Volver** si necesita corregir algo.
-4. El backend verifica que el correo corresponda al cliente propietario de la cotización.
-5. El backend vuelve a comprobar la existencia. Si no alcanza, rechaza la compra sin confirmarla.
-6. Odoo confirma la `sale.order`, reserva el inventario y valida el despacho para descontar la existencia física.
-7. La oportunidad de CRM se actualiza a 100 %.
-8. El servicio registra un pago educativo aprobado y genera un recibo `SIM-...`.
-9. El sistema intenta crear y publicar la factura.
-10. El sitio abre el detalle de la orden confirmada y presenta su trazabilidad.
+1. Abra el detalle oficial mediante **Ver y pagar cotización** o desde **Mis pedidos**.
+2. Seleccione la tarjeta y presione **Pagar** seguido del código del documento.
+3. Revise las líneas oficiales, unidades, total y tarjeta en la confirmación final.
+4. Presione **Confirmar y pagar**. Puede utilizar **Volver** si necesita corregir algo.
+5. El backend verifica que el correo corresponda al cliente propietario de la cotización.
+6. El backend vuelve a comprobar la existencia. Si no alcanza, rechaza la compra sin confirmarla.
+7. Odoo confirma la `sale.order`, reserva el inventario y valida el despacho para descontar la existencia física.
+8. La oportunidad de CRM se actualiza a 100 %.
+9. El servicio registra un pago educativo aprobado y genera un recibo `SIM-...`.
+10. El sistema intenta crear y publicar la factura.
+11. El sitio abre el detalle de la orden confirmada y presenta su trazabilidad.
 
 ![Confirmación final antes de afectar el inventario](capturas/05_confirmar_compra.png)
 
@@ -223,10 +224,11 @@ Si la orden se confirma pero la configuración contable impide crear la factura,
 
 1. Seleccione **Mis pedidos**.
 2. Ingrese el mismo correo utilizado durante el registro o la cotización.
-3. Presione **Consultar**.
-4. Abra la pestaña **Pedidos**.
+3. Si conoce el código, escríbalo en **Código**, por ejemplo `S00017`.
+4. Presione **Consultar**.
+5. Abra la cotización encontrada y utilice el panel **Paga este documento**.
 
-El resumen superior muestra cuántos documentos, facturas y pagos existen. La lista diferencia cotizaciones, cotizaciones enviadas, órdenes confirmadas, órdenes completadas y documentos cancelados. Puede buscar por número o estado y filtrar entre cotizaciones y pedidos confirmados. Seleccione una fila para abrir su detalle.
+El correo protege la consulta: el código solo mostrará el documento si pertenece a ese cliente. El resumen superior muestra cuántos documentos, facturas y pagos existen. La lista diferencia cotizaciones, cotizaciones enviadas, órdenes confirmadas, órdenes completadas y documentos cancelados. También puede buscar por número o estado y filtrar entre cotizaciones y pedidos confirmados.
 
 ![Portal con cotizaciones y órdenes](capturas/08_portal_pedidos.png)
 
